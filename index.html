@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMAPAweb - Protótipo Interativo com IA</title>
+    <!-- Chosen Palette: Pedra & Mata -->
+    <!-- Application Structure Plan: A estrutura agora é uma SPA multi-seção com uma barra de navegação superior fixa (Início, Mapa, Banco de Dados). A página de Início serve como portal. A página do Mapa mantém o layout de dashboard com barra lateral de filtros. A página de Banco de Dados apresenta os dados em uma tabela interativa. Essa estrutura organiza o conteúdo de forma lógica, guiando o usuário desde a introdução ao projeto até a exploração detalhada dos dados. -->
+    <!-- Visualization & Content Choices: Mapa (Leaflet.js) e Gráfico (Chart.js) na seção do mapa. Tabela HTML interativa na seção de Banco de Dados, populada dinamicamente via JS. A interatividade principal continua nos filtros do mapa e na busca da tabela. A chamada para a API Gemini permanece na seção do mapa para análise contextual. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        .leaflet-container { background: #f0f0f0; }
+        .chart-container { position: relative; width: 100%; max-width: 400px; margin-left: auto; margin-right: auto; height: 300px; max-height: 350px; }
+        .gemini-report h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .gemini-report ul { list-style-position: inside; padding-left: 1rem; }
+        .gemini-report li { margin-bottom: 0.25rem; }
+        .nav-button.active { background-color: #4A453F; color: #F8F6F4; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'fundo': '#F8F6F4',
+                        'principal': '#4A453F',
+                        'secundaria': '#8C8379',
+                        'destaque': '#A49A8D',
+                        'risco-alto': '#E57373',
+                        'risco-medio': '#FFB74D',
+                        'risco-baixo': '#81C784',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-fundo text-principal">
+    <header class="bg-white/80 backdrop-blur-sm shadow-md sticky top-0 z-20">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                 <div class="bg-principal p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                </div>
+                <h1 class="text-xl font-bold text-principal">GeoMAPAweb</h1>
+            </div>
+            <div class="space-x-4">
+                <button data-target="home" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors active">Início</button>
+                <button data-target="map" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Mapa Interativo</button>
+                <button data-target="database" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Repositório de Dados</button>
+            </div>
+        </nav>
+    </header>
+
+    <main id="app-container">
+        <!-- Seção de Início -->
+        <section id="home" class="page-section">
+            <!-- Hero Section -->
+            <div class="bg-white">
+                <div class="container mx-auto px-6 py-16 md:py-24">
+                    <div class="grid md:grid-cols-2 gap-12 items-center">
+                        <div class="text-center md:text-left">
+                            <div class="flex justify-center md:justify-start items-center space-x-4 mb-4">
+                                <img src="https://placehold.co/150x60/E2E8F0/4A453F?text=Logo+UNIFESP" alt="Logo UNIFESP" class="h-12">
+                                <img src="https://placehold.co/150x60/E2E8F0/4A453F?text=Logo+GeoMAPA" alt="Logo GeoMAPA" class="h-12">
+                            </div>
+                            <h2 class="text-4xl md:text-5xl font-bold mb-4 text-principal">Plataforma Interativa de Análise de Risco</h2>
+                            <p class="text-lg text-secundaria mb-8">
+                                Uma ferramenta de código aberto para visualização de mapas de suscetibilidade geológica, desenvolvida no âmbito do Programa de Iniciação Científica (PIBITI) da UNIFESP.
+                            </p>
+                            <button data-target="map" class="nav-button bg-principal text-white font-bold py-3 px-6 rounded-lg hover:bg-principal/90 transition-colors text-lg">
+                                Explorar o Mapa
+                            </button>
+                        </div>
+                        <div>
+                            <img src="https://i.imgur.com/sM02o2F.png" alt="Globo terrestre com foco na América do Sul" class="rounded-lg w-full object-cover h-full">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advantages Section -->
+            <div class="container mx-auto px-6 py-16">
+                <h3 class="text-3xl font-bold text-center mb-12">Vantagens do Projeto</h3>
+                <div class="grid md:grid-cols-3 gap-8 text-center">
+                    <div class="bg-white p-8 rounded-lg shadow-md">
+                        <div class="bg-destaque/30 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-principal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">Dados Abertos</h4>
+                        <p class="text-secundaria">Acesso democrático a informações geoespaciais de qualidade para toda a comunidade.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-lg shadow-md">
+                        <div class="bg-destaque/30 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-principal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">Análise Inteligente</h4>
+                        <p class="text-secundaria">Utilize a IA do Gemini para gerar relatórios técnicos e insights a partir dos dados do mapa.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-lg shadow-md">
+                        <div class="bg-destaque/30 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-principal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">Apoio à Decisão</h4>
+                        <p class="text-secundaria">Uma ferramenta para auxiliar gestores públicos e a Defesa Civil no planejamento e prevenção de riscos.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team Section -->
+            <div class="bg-white">
+                <div class="container mx-auto px-6 py-16">
+                    <h3 class="text-3xl font-bold text-center mb-12">Nossa Equipe</h3>
+                    <div class="flex flex-wrap justify-center gap-8">
+                        <div class="text-center text-secundaria w-64">
+                            <img src="https://placehold.co/200x200/E2E8F0/4A453F?text=Foto" alt="Foto do Orientador" class="rounded-full w-40 h-40 mx-auto mb-4 shadow-lg">
+                            <h4 class="text-xl font-bold text-principal">Prof. Dr. Adilson V. Soares Junior</h4>
+                            <p>Orientador</p>
+                        </div>
+                        <div class="text-center text-secundaria w-64">
+                            <img src="https://placehold.co/200x200/E2E8F0/4A453F?text=Foto" alt="Foto da Aluna" class="rounded-full w-40 h-40 mx-auto mb-4 shadow-lg">
+                            <h4 class="text-xl font-bold text-principal">Millena de Castro Sousa</h4>
+                            <p>Aluna de Iniciação Científica</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção do Mapa -->
+        <section id="map" class="page-section hidden">
+            <div class="flex flex-col md:flex-row min-h-[calc(100vh-64px)]">
+                <aside class="w-full md:w-80 lg:w-96 bg-white/50 p-6 border-r border-destaque/30 flex-shrink-0">
+                    <nav class="space-y-6 sticky top-24">
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-secundaria uppercase tracking-wider">Filtros por Nível de Risco</h3>
+                            <div id="filters-risco" class="space-y-2 text-sm">
+                                <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" data-filter-type="risco" value="Alto" class="form-checkbox h-4 w-4 rounded text-risco-alto" checked><span class="text-principal">Risco Alto</span></label>
+                                <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" data-filter-type="risco" value="Médio" class="form-checkbox h-4 w-4 rounded text-risco-medio" checked><span class="text-principal">Risco Médio</span></label>
+                                <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" data-filter-type="risco" value="Baixo" class="form-checkbox h-4 w-4 rounded text-risco-baixo" checked><span class="text-principal">Risco Baixo</span></label>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-secundaria uppercase tracking-wider">Filtros por Município</h3>
+                            <div id="municipio-filter-container" class="space-y-2 text-sm max-h-48 overflow-y-auto border p-2 rounded-md">
+                                <!-- Checkboxes de municípios serão inseridos aqui via JS -->
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-semibold text-secundaria uppercase tracking-wider">Análise Inteligente</h3>
+                            <button id="gemini-analysis-button" class="mt-2 w-full bg-principal text-white font-bold py-2 px-4 rounded-lg hover:bg-principal/90 flex items-center justify-center space-x-2"><span>Analisar Risco</span><span class="text-lg">✨</span></button>
+                        </div>
+                    </nav>
+                </aside>
+                <div class="flex-1 p-4 md:p-8 lg:p-10 overflow-auto">
+                    <div id="content-rmsp" class="content-section">
+                        <h2 class="text-3xl font-bold mb-2">Suscetibilidade Geológica</h2>
+                        <p class="text-secundaria mb-6 max-w-4xl">Utilize os filtros para explorar os dados de suscetibilidade a escorregamentos. Clique no botão de Análise Inteligente para gerar um relatório técnico sobre as áreas visíveis.</p>
+                        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                            <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-md">
+                                <div id="map-rmsp" class="h-96 md:h-[60vh] rounded-lg relative">
+                                    <div id="map-warning" class="hidden absolute inset-0 bg-yellow-100/80 backdrop-blur-sm z-10 flex items-center justify-center p-4">
+                                        <div class="text-center text-yellow-800">
+                                            <h4 class="font-bold text-lg mb-2">Ação Necessária: Corrija as Coordenadas</h4>
+                                            <p>Os dados GeoJSON carregados não estão no sistema de coordenadas correto (WGS 84). Para visualizar o mapa, por favor, siga o guia no QGIS para **reprojetar a camada** para **EPSG:4326** e cole o novo conteúdo no código.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-md flex flex-col items-center justify-center">
+                                <h3 class="font-bold text-lg mb-2 text-center">Distribuição de Áreas por Risco</h3>
+                                <div class="chart-container"><canvas id="rmspChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                    <section id="gemini-report-container" class="mt-10 bg-white p-6 rounded-xl shadow-md hidden">
+                        <h2 class="text-2xl font-bold mb-4 flex items-center space-x-2"><span>Relatório de Análise de Risco</span><span class="text-xl">✨</span></h2>
+                        <div id="gemini-spinner" class="hidden items-center justify-center py-8">
+                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-principal"></div><p class="ml-4 text-secundaria">Analisando dados com a IA do Gemini...</p>
+                        </div>
+                        <div id="gemini-report-content" class="text-secundaria leading-relaxed gemini-report"></div>
+                    </section>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção do Repositório de Dados -->
+        <section id="database" class="page-section hidden container mx-auto px-6 py-12">
+            <h2 class="text-3xl font-bold mb-4">Repositório de Dados</h2>
+            <p class="text-secundaria mb-6">Navegue pelos municípios para acessar os dados brutos, mapas temáticos e a carta de suscetibilidade final em formato PDF.</p>
+            <div id="database-container" class="space-y-4">
+                <!-- Conteúdo do repositório gerado via JS -->
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            
+            // --- PONTO DE CUSTOMIZAÇÃO: CARREGAMENTO DE DADOS --- //
+            // COLE AQUI O CONTEÚDO DO SEU ARQUIVO GEOJSON REPROJETADO PARA EPSG:4326.
+            const geojsonData = {
+                "type": "FeatureCollection",
+                "features": [] 
+            };
+
+            // --- PONTO DE CUSTOMIZAÇÃO: DADOS DO REPOSITÓRIO --- //
+            // Adicione aqui os links para os arquivos de cada município.
+            const databaseData = {
+                "Biritiba Mirim": {
+                    "Litologia": { type: "link", url: "#", description: "Mapa de litologia do município." },
+                    "Uso do Solo": { type: "link", url: "#", description: "Mapa de uso e ocupação do solo." },
+                    "Declividade": { type: "link", url: "#", description: "Mapa de declividade do terreno." },
+                    "Suscetibilidade (Dados)": { type: "data", url: "#", description: "Dados vetoriais da carta de suscetibilidade (GeoJSON)." },
+                    "Carta de Suscetibilidade (PDF)": { type: "pdf", url: "https://storage.googleapis.com/files-maker-in-prod/2024/8/29/CARTA-sus-biritiba_mirim-2025.pdf_1724959114674_0.pdf", description: "Versão final da carta para download." }
+                },
+                "Mogi das Cruzes (Exemplo)": {
+                    "Litologia": { type: "link", url: "#", description: "Dados indisponíveis." },
+                    "Uso do Solo": { type: "link", url: "#", description: "Dados indisponíveis." },
+                }
+            };
+
+            // --- PONTO DE CUSTOMIZAÇÃO: CORES DA PLATAFORMA --- //
+            const riskColors = { 'Alto': '#E57373', 'Médio': '#FFB74D', 'Baixo': '#81C784' };
+
+            // --- PRÉ-PROCESSAMENTO DOS DADOS --- //
+            const riskMapping = { 1: 'Baixo', 2: 'Médio', 3: 'Alto' };
+            geojsonData.features.forEach(feature => {
+                feature.properties.municipio = 'Biritiba Mirim';
+                feature.properties.risco = riskMapping[feature.properties.value] || 'Indefinido';
+            });
+            const data = { rmsp: geojsonData };
+            
+            const appState = {
+                filters: { rmsp: { risco: ['Alto', 'Médio', 'Baixo'], municipio: [] } },
+                currentFilteredData: []
+            };
+
+            let mapRMSP;
+            let rmspChart;
+            let layerRMSP = null;
+
+            // --- LÓGICA DE NAVEGAÇÃO --- //
+            const navButtons = document.querySelectorAll('.nav-button');
+            const pages = document.querySelectorAll('.page-section');
+
+            function switchPage(targetId) {
+                pages.forEach(page => page.classList.toggle('hidden', page.id !== targetId));
+                document.querySelectorAll('.nav-button').forEach(button => button.classList.toggle('active', button.dataset.target === targetId));
+                if (targetId === 'map' && mapRMSP) setTimeout(() => mapRMSP.invalidateSize(), 10);
+                if (targetId === 'database') populateDatabaseView();
+            }
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => switchPage(button.dataset.target));
+            });
+
+            // --- LÓGICA DOS FILTROS --- //
+            function populateMunicipioFilter() {
+                const container = document.getElementById('municipio-filter-container');
+                const municipios = [...new Set(data.rmsp.features.map(f => f.properties.municipio))].sort();
+                
+                appState.filters.rmsp.municipio = municipios;
+                container.innerHTML = '';
+
+                if (municipios.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-secundaria">Nenhum dado de município carregado.</p>';
+                    return;
+                }
+
+                municipios.forEach(municipio => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center space-x-2 cursor-pointer';
+                    label.innerHTML = `<input type="checkbox" data-filter-type="municipio" value="${municipio}" class="form-checkbox h-4 w-4 rounded text-principal" checked><span class="text-principal">${municipio}</span>`;
+                    container.appendChild(label);
+                });
+
+                container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => checkbox.addEventListener('change', handleFilterChange));
+            }
+
+            function handleFilterChange() {
+                appState.filters.rmsp.risco = Array.from(document.querySelectorAll('#filters-risco input:checked')).map(cb => cb.value);
+                appState.filters.rmsp.municipio = Array.from(document.querySelectorAll('#municipio-filter-container input:checked')).map(cb => cb.value);
+                updateRMSPView();
+            }
+
+            // --- INICIALIZAÇÃO DO MAPA E GRÁFICO --- //
+            function initMap() {
+                if (mapRMSP) return;
+                mapRMSP = L.map('map-rmsp').setView([-23.56, -46.04], 12); // Coordenadas para Biritiba Mirim
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                }).addTo(mapRMSP);
+            }
+
+            function initChart() {
+                if (rmspChart) return;
+                const ctx = document.getElementById('rmspChart').getContext('2d');
+                rmspChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor: '#F8F6F4', borderWidth: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+
+            // --- ATUALIZAÇÃO DAS VISUALIZAÇÕES --- //
+            function updateRMSPView() {
+                const filteredData = data.rmsp.features.filter(f => 
+                    appState.filters.rmsp.risco.includes(f.properties.risco) &&
+                    appState.filters.rmsp.municipio.includes(f.properties.municipio)
+                );
+                appState.currentFilteredData = filteredData;
+                if (layerRMSP) { layerRMSP.clearLayers(); }
+
+                if (geojsonData.features.length > 0 && geojsonData.features[0].geometry.coordinates[0][0][0].length === 2) {
+                    document.getElementById('map-warning').classList.add('hidden');
+                    layerRMSP = L.geoJSON(filteredData, {
+                        style: f => ({ fillColor: riskColors[f.properties.risco], weight: 1, opacity: 1, color: 'white', fillOpacity: 0.7 }),
+                        onEachFeature: (f, l) => l.bindPopup(`<b>Município:</b> ${f.properties.municipio}<br><b>Risco:</b> ${f.properties.risco}`)
+                    }).addTo(mapRMSP);
+                    if (filteredData.length > 0 && layerRMSP.getBounds().isValid()) { 
+                        mapRMSP.fitBounds(layerRMSP.getBounds().pad(0.01)); 
+                    }
+                } else {
+                    document.getElementById('map-warning').classList.remove('hidden');
+                }
+                updateRMSPChart(filteredData);
+            }
+            
+            function updateRMSPChart(filteredData) {
+                const riskCounts = { 'Alto': 0, 'Médio': 0, 'Baixo': 0 };
+                filteredData.forEach(f => {
+                    if (f.properties.risco in riskCounts) {
+                        riskCounts[f.properties.risco]++;
+                    }
+                });
+                
+                const labels = Object.keys(riskCounts).filter(k => riskCounts[k] > 0);
+                const chartData = labels.map(k => riskCounts[k]);
+                
+                rmspChart.data.labels = labels;
+                rmspChart.data.datasets[0].data = chartData;
+                rmspChart.data.datasets[0].backgroundColor = labels.map(label => riskColors[label]);
+                rmspChart.update();
+            }
+
+            // --- LÓGICA DO REPOSITÓRIO DE DADOS --- //
+            function populateDatabaseView() {
+                const container = document.getElementById('database-container');
+                container.innerHTML = '';
+
+                for (const municipio in databaseData) {
+                    const municipioData = databaseData[municipio];
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'bg-white rounded-lg shadow-md';
+
+                    const header = document.createElement('button');
+                    header.className = 'w-full flex justify-between items-center p-4 text-left font-bold';
+                    header.innerHTML = `
+                        <span>${municipio}</span>
+                        <svg class="w-5 h-5 transition-transform transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    `;
+
+                    const content = document.createElement('div');
+                    content.className = 'accordion-content px-4 pb-4';
+                    
+                    const list = document.createElement('ul');
+                    list.className = 'space-y-3';
+                    for (const layerName in municipioData) {
+                        const layerInfo = municipioData[layerName];
+                        const listItem = document.createElement('li');
+                        listItem.className = 'flex items-center justify-between p-3 bg-fundo/50 rounded-md';
+                        listItem.innerHTML = `
+                            <div>
+                                <p class="font-semibold">${layerName}</p>
+                                <p class="text-sm text-secundaria">${layerInfo.description}</p>
+                            </div>
+                            <a href="${layerInfo.url}" target="_blank" class="bg-destaque/50 text-principal px-3 py-1 rounded-full text-sm font-semibold hover:bg-destaque">Acessar</a>
+                        `;
+                        list.appendChild(listItem);
+                    }
+                    content.appendChild(list);
+                    
+                    wrapper.appendChild(header);
+                    wrapper.appendChild(content);
+                    container.appendChild(wrapper);
+
+                    header.addEventListener('click', () => {
+                        const icon = header.querySelector('svg');
+                        icon.classList.toggle('rotate-180');
+                        if (content.style.maxHeight) {
+                            content.style.maxHeight = null;
+                        } else {
+                            content.style.maxHeight = content.scrollHeight + "px";
+                        }
+                    });
+                }
+            }
+
+            // --- LÓGICA DA API GEMINI --- //
+            async function callGeminiAPI(prompt) {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const systemPrompt = "Você é um especialista em geotecnia e análise de risco ambiental. Responda em português do Brasil e use Markdown.";
+                const payload = { contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                    const result = await response.json();
+                    return result.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error("Erro na API Gemini:", error);
+                    return "Não foi possível gerar o relatório.";
+                }
+            }
+
+            async function handleGenerateReportClick() {
+                const reportContainer = document.getElementById('gemini-report-container');
+                const spinner = document.getElementById('gemini-spinner');
+                const reportContent = document.getElementById('gemini-report-content');
+                const button = document.getElementById('gemini-analysis-button');
+
+                reportContainer.classList.remove('hidden');
+                spinner.style.display = 'flex';
+                reportContent.innerHTML = '';
+                button.disabled = true;
+                button.classList.add('opacity-50');
+
+                if (appState.currentFilteredData.length === 0) {
+                    reportContent.innerHTML = "Nenhuma área de risco selecionada para análise.";
+                    spinner.style.display = 'none';
+                    button.disabled = false;
+                    button.classList.remove('opacity-50');
+                    return;
+                }
+
+                const formattedData = appState.currentFilteredData.map(f => `Município: ${f.properties.municipio}, Nível de Risco: ${f.properties.risco}`).join('; ');
+                const userPrompt = `Com base nos dados de suscetibilidade a deslizamentos: ${formattedData}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para áreas de risco 'Alto'. 3. Ações de monitoramento para risco 'Médio'.`;
+                
+                const resultText = await callGeminiAPI(userPrompt);
+                reportContent.innerHTML = marked.parse(resultText);
+                spinner.style.display = 'none';
+                button.disabled = false;
+                button.classList.remove('opacity-50');
+            }
+
+            // --- INICIALIZAÇÃO DA APLICAÇÃO --- //
+            document.getElementById('filters-risco').querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', handleFilterChange);
+            });
+            document.getElementById('gemini-analysis-button').addEventListener('click', handleGenerateReportClick);
+
+            initMap();
+            initChart();
+            populateMunicipioFilter();
+            updateRMSPView();
+            switchPage('home');
+        });
+    </script>
+
+</body>
+</html>
