@@ -1,55 +1,73 @@
-# GeoMAPAweb - Manual de Manutenção e Atualização
+# GeoMAPAWeb - Manual de Manutenção e Atualização
 
-Este documento serve como um guia para futuros mantenedores da plataforma GeoMAPAweb.
+Este documento serve como um guia para futuros mantenedores da plataforma GeoMAPAWeb, do Laboratório de Geoprocessamento, Modelagem e Análise de Processos Ambientais (GeoMAPA) da UNIFESP - Campus Diadema.
 
 ## Visão Geral do Projeto
-O GeoMAPAweb é uma plataforma de código aberto para visualização de mapas de suscetibilidade geológica. O projeto usa HTML, JavaScript puro e as bibliotecas Leaflet.js e Chart.js, sem etapa de build: basta abrir o `index.html` no navegador.
+O GeoMAPAWeb é uma plataforma web de código aberto para visualizar a suscetibilidade geológica a escorregamentos e apoiar a tomada de decisão no planejamento territorial. Usa HTML, CSS e JavaScript puro, com Leaflet.js, Chart.js e Tailwind carregados por CDN. Não há etapa de build nem `npm install`.
+
+### Abas
+1. **Início**: apresentação do projeto, guia rápido e equipe.
+2. **Suscetibilidade**: mapa de escorregamentos com seletor de município, filtro por grau (Baixa, Média, Alta, Muito Alta), transparência, equipamentos públicos (escolas, saúde, abrigos) e mapas de fundo (OpenStreetMap, Satélite Esri, Topográfico).
+3. **Gestão**: área de risco, equipamentos atingidos, população exposta, gráficos Chart.js, tabelas exportáveis em CSV e impressão/PDF.
+4. **Guia do Estudante**: passo a passo para publicar uma nova camada.
+5. **Repositório**: links para os arquivos de cada município.
 
 ### Estrutura dos arquivos
-* `index.html`: estrutura das abas (Início, Mapa Interativo, Gestão, Repositório de Dados).
-* `css/styles.css`: estilos próprios da plataforma.
-* `data/`: um arquivo `.js` por camada GeoJSON.
-* `js/config.js`: **pontos de customização** (camadas, cores, mapas de fundo, ações por classe de risco, links do repositório).
-* `js/data.js`: prepara os dados (classe de risco, área em km²) e guarda os filtros compartilhados.
-* `js/map.js`: mapa Leaflet, mapas de fundo, camadas e legenda.
-* `js/filters.js`: seletor de camadas e painel de filtros da barra lateral.
-* `js/charts.js`: gráfico ao lado do mapa.
-* `js/gestao.js`: aba Gestão / Tomada de Decisão (indicadores, gráficos e prioridade por município).
-* `js/repositorio.js`, `js/gemini.js`, `js/app.js`: repositório de dados, análise com IA e navegação.
+```text
+/
+├── index.html              estrutura das abas
+├── css/style.css           estilos próprios
+├── js/
+│   ├── config.js           PONTOS DE CUSTOMIZAÇÃO: camadas, equipamentos, cores, textos
+│   ├── layers.js           carrega os GeoJSON, calcula áreas e guarda os filtros
+│   ├── ui.js               funções de interface comuns
+│   ├── map.js              criação dos mapas Leaflet, mapas de fundo e legendas
+│   ├── suscetibilidade.js  aba Suscetibilidade
+│   ├── gestao.js           aba Gestão
+│   ├── repositorio.js      aba Repositório
+│   ├── gemini.js           Análise Inteligente (API Gemini)
+│   └── app.js              navegação e inicialização
+├── data/
+│   ├── geologico/          GeoJSON de suscetibilidade
+│   └── equipamentos_publicos.geojson   pontos de escolas, saúde e abrigos
+└── assets/                 imagens e logos
+```
 
 ## Como Atualizar a Plataforma
 
 A plataforma está hospedada no GitHub Pages e é atualizada automaticamente sempre que uma nova alteração é enviada para o repositório.
 
-**O fluxo de trabalho é:**
-1.  **Clone o repositório:** Baixe a versão mais recente do projeto para o seu computador.
-2.  **Edite os arquivos:** Na maior parte das vezes, só `js/config.js` e a pasta `data/` precisam mudar.
-3.  **Teste localmente:** Salve o arquivo e abra-o diretamente no seu navegador para ver se as mudanças funcionaram.
-4.  **Envie as alterações:** Use o Git para enviar os arquivos alterados de volta para o GitHub. A plataforma online será atualizada em minutos.
+1. **Edite os arquivos:** na maior parte das vezes, só `js/config.js` e a pasta `data/` mudam.
+2. **Teste localmente:** o navegador não lê os GeoJSON se o `index.html` for aberto com dois cliques. Use a extensão *Live Server* do VS Code ou rode `python -m http.server` na pasta do projeto e abra `http://localhost:8000`. No GitHub Codespaces, rode o mesmo comando e abra a porta 8000.
+3. **Envie as alterações:** faça o commit no GitHub. O site é atualizado em poucos minutos.
+
+Se algum arquivo não carregar, um aviso amarelo aparece no topo do site dizendo qual.
 
 ## Editando o Conteúdo
 
-As principais atualizações são feitas em locais marcados com o comentário `PONTO DE CUSTOMIZAÇÃO`, quase todos em `js/config.js`.
+As atualizações são feitas em locais marcados com o comentário `PONTO DE CUSTOMIZAÇÃO`, quase todos em `js/config.js`.
 
-### 1. Para Adicionar Novos Dados Geoespaciais (Mapas):
-* **Atenção:** Os dados (Shapefiles) precisam ser convertidos para o formato **GeoJSON** com o sistema de coordenadas **EPSG:4326 - WGS 84** usando o QGIS.
-* Para atualizar a carta de Biritiba Mirim, abra `data/biritiba-mirim-suscetibilidade.js` e cole o conteúdo do GeoJSON no lugar do objeto `FeatureCollection`.
-* Para uma **nova camada** (outro município ou outro tema):
-  1. Copie `data/biritiba-mirim-suscetibilidade.js` para um novo arquivo em `data/`, trocando o identificador entre colchetes.
-  2. Inclua o novo arquivo com uma tag `<script>` no `index.html`, junto da já existente.
-  3. Adicione uma entrada em `camadas`, no `js/config.js`. Camadas do tipo `suscetibilidade` entram nos filtros e na aba Gestão; informe em `campoRisco` o nome da coluna da classe no GeoJSON e em `mapeamentoRisco` como converter seus valores.
+### 1. Para adicionar uma camada de suscetibilidade
+* Exporte o GeoJSON no QGIS em **EPSG:4326 - WGS 84**.
+* Salve em `data/geologico/`, com nome sem espaços nem acentos.
+* Em `js/config.js`, copie um bloco da lista `suscetibilidade.camadas` e troque `id`, `arquivo`, `municipio` e `campoClasse` (coluna do grau). Se a coluna tiver números, use `mapeamentoClasse` para convertê-los em Baixa, Média, Alta e Muito Alta.
+* Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em `campoPopulacao` para a aba Gestão estimar a população exposta.
 
-### 2. Para Atualizar o Repositório de Dados (PDFs, Links):
-* Faça o upload do novo arquivo (ex: um PDF) para algum lugar online (como Google Drive, ou o próprio GitHub).
-* Procure pela seção: `// --- PONTO DE CUSTOMIZAÇÃO: DADOS DO REPOSITÓRIO --- //`
-* Edite `databaseData` em `js/config.js`, adicionando ou alterando os links e descrições dos arquivos para o município correspondente.
+### 2. Para atualizar os equipamentos públicos
+* Substitua `data/equipamentos_publicos.geojson` por um GeoJSON de pontos com as colunas `tipo` (escola, saude, abrigo) e `nome`.
+* Os tipos aceitos e suas cores ficam em `suscetibilidade.equipamentos.tipos`. Um equipamento é contado como atingido quando está dentro de um polígono das `classesDeRisco`.
 
-### 3. Para Ajustar a Aba Gestão:
-* As ações recomendadas para cada classe de risco ficam em `acoesPorClasse`, no `js/config.js`.
+### 3. Para atualizar o Repositório de Dados (PDFs, links)
+* Faça o upload do arquivo para algum lugar online (Google Drive ou o próprio GitHub).
+* Edite `databaseData` em `js/config.js`.
 
-### 4. Para Alterar a Aparência (Textos, Imagens, Logos):
-* Os textos da página inicial, informações da equipe e logos podem ser alterados diretamente no HTML, na seção `<section id="home">`.
-* As cores das classes de risco ficam em `riskColors` e os mapas de fundo em `mapasBase`, no `js/config.js`.
+### 4. Para ajustar a aba Gestão
+* As ações recomendadas para cada grau ficam em `acoesPorClasse`.
+* As classes consideradas de risco (área de risco, equipamentos atingidos e população exposta) ficam em `suscetibilidade.classesDeRisco`.
+
+### 5. Para alterar a aparência (textos, imagens, logos)
+* Textos da página inicial, equipe, logos e o Guia do Estudante podem ser alterados diretamente no `index.html`.
+* Cores das classes ficam em `suscetibilidade.classes` e os mapas de fundo em `mapasBase`, no `js/config.js`.
 
 ## Contato
 - **Desenvolvedora Original:** Millena de Castro Sousa

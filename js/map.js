@@ -1,110 +1,95 @@
-// Mapa Leaflet: mapas de fundo, camadas temáticas e legenda.
+/*
+ * map.js: FUNÇÕES COMUNS DOS MAPAS LEAFLET
+ *
+ * Cria os mapas das abas com o seletor de mapa de fundo, a escala e os
+ * painéis de legenda. A aba Suscetibilidade (suscetibilidade.js) usa estas funções.
+ */
 (function () {
     const config = GeoMAPA.config;
-    const data = GeoMAPA.data;
+    const mapas = [];
 
-    let map;
-    let baseAtual;
-    const basesLeaflet = {};
-    const camadasLeaflet = {};
-    let jaEnquadrou = false;
-
-    function estiloSuscetibilidade(f) {
-        return {
-            fillColor: config.riskColors[f.properties.risco] || '#999999',
-            weight: 1, opacity: 1, color: 'white',
-            fillOpacity: data.state.filtros.opacidade
-        };
-    }
-
-    function popupSuscetibilidade(f) {
-        const p = f.properties;
-        return `<b>Município:</b> ${p.municipio}<br><b>Risco:</b> ${p.risco}<br><b>Área:</b> ${p.area_km2.toFixed(3)} km²`;
-    }
-
-    function criarLegenda() {
-        const legenda = L.control({ position: 'bottomright' });
-        legenda.onAdd = () => {
-            const div = L.DomUtil.create('div', 'map-legend');
-            div.innerHTML = '<strong>Suscetibilidade</strong>' + config.classesRisco.map(classe =>
-                `<div><span style="background:${config.riskColors[classe]}"></span>${classe}</div>`
-            ).join('');
-            return div;
-        };
-        legenda.addTo(map);
-    }
-
-    function init() {
-        map = L.map('map-rmsp').setView(config.mapa.centro, config.mapa.zoom);
-        config.mapasBase.forEach(base => {
-            basesLeaflet[base.id] = L.tileLayer(base.url, { attribution: base.attribution, maxZoom: 19 });
+    /**
+     * Cria um mapa Leaflet com os mapas de fundo de config.js e a barra de escala.
+     * @param {string} elementoId id da <div> que receberá o mapa.
+     * @param {Array<number>} centro [latitude, longitude] da vista inicial.
+     * @param {number} zoom Nível de zoom inicial.
+     * @returns {L.Map} Mapa criado.
+     */
+    function criarMapa(elementoId, centro, zoom) {
+        const mapa = L.map(elementoId).setView(centro, zoom);
+        const bases = {};
+        config.mapasBase.forEach((base, i) => {
+            const camada = L.tileLayer(base.url, { attribution: base.attribution, maxZoom: base.maxZoom || 19 });
+            bases[base.nome] = camada;
+            if (i === 0) camada.addTo(mapa);
         });
-        setMapaBase(config.mapasBase[0].id);
-        L.control.scale({ imperial: false }).addTo(map);
-        criarLegenda();
-
-        const algumaForaDoPadrao = data.camadas.some(c => !c.coordenadasOk);
-        document.getElementById('map-warning').classList.toggle('hidden', !algumaForaDoPadrao);
-
-        data.onChange(render);
-        render();
+        L.control.layers(bases, null, { position: 'topright', collapsed: false }).addTo(mapa);
+        L.control.scale({ imperial: false }).addTo(mapa);
+        mapa._jaEnquadrado = false;
+        mapas.push(mapa);
+        return mapa;
     }
 
-    function setMapaBase(id) {
-        if (baseAtual) map.removeLayer(baseAtual);
-        baseAtual = basesLeaflet[id].addTo(map);
-        baseAtual.bringToBack();
+    /**
+     * Adiciona ao mapa um painel (ex.: legenda) cujo conteúdo pode ser trocado depois.
+     * @param {L.Map} mapa Mapa que recebe o painel.
+     * @param {string} posicao 'topleft', 'topright', 'bottomleft' ou 'bottomright'.
+     * @returns {HTMLElement} Elemento do painel; altere seu innerHTML para atualizar.
+     */
+    function criarPainel(mapa, posicao) {
+        const controle = L.control({ position: posicao });
+        const div = L.DomUtil.create('div', 'map-legend');
+        controle.onAdd = () => div;
+        controle.addTo(mapa);
+        L.DomEvent.disableClickPropagation(div);
+        return div;
     }
 
-    function render() {
-        const { filtros } = data.state;
-
-        data.camadas.forEach(camada => {
-            if (camadasLeaflet[camada.id]) {
-                map.removeLayer(camadasLeaflet[camada.id]);
-                delete camadasLeaflet[camada.id];
-            }
-            if (!filtros.camadas.includes(camada.id) || !camada.coordenadasOk) return;
-
-            let layer;
-            if (camada.tipo === 'suscetibilidade') {
-                layer = L.geoJSON(camada.geojson, {
-                    filter: f => filtros.risco.includes(f.properties.risco) && filtros.municipio.includes(f.properties.municipio),
-                    style: estiloSuscetibilidade,
-                    onEachFeature: (f, l) => l.bindPopup(popupSuscetibilidade(f))
-                });
-            } else {
-                layer = L.geoJSON(camada.geojson, {
-                    style: { color: camada.cor || '#2F4F4F', weight: 2, fillOpacity: 0.1 },
-                    onEachFeature: (f, l) => l.bindPopup(`<b>${camada.nome}</b>`)
-                });
-            }
-            camadasLeaflet[camada.id] = layer.addTo(map);
-        });
-
-        enquadrar();
+    /**
+     * Monta o HTML de uma legenda com quadradinhos coloridos.
+     * @param {string} titulo Título da legenda.
+     * @param {Array<{nome: string, cor: string, redondo: boolean}>} itens Classes exibidas
+     *        (redondo = true desenha um círculo, para pontos).
+     * @returns {string} HTML da legenda.
+     */
+    function htmlLegenda(titulo, itens) {
+        return `<strong>${titulo}</strong>` + itens.map(i =>
+            `<div><span style="background:${i.cor}${i.redondo ? ';border-radius:50%' : ''}"></span>${i.nome}</div>`).join('');
     }
 
-    // Enquadra os dados só na primeira vez, para não tirar o usuário do lugar a cada clique de filtro.
-    // Com a aba escondida o mapa tem tamanho zero, então espera ela aparecer.
-    function enquadrar() {
-        if (jaEnquadrou || map.getSize().x === 0) return;
-        const visiveis = Object.values(camadasLeaflet);
-        if (!visiveis.length) return;
-        const limites = L.featureGroup(visiveis).getBounds();
+    /**
+     * Aproxima o mapa das camadas visíveis. Só age uma vez e só com a aba aparecendo,
+     * porque um mapa escondido tem tamanho zero.
+     * @param {L.Map} mapa Mapa a enquadrar.
+     * @param {Array<L.Layer>} camadas Camadas cujos limites serão usados.
+     * @param {boolean} [forcar=false] Enquadra mesmo que já tenha enquadrado antes.
+     * @returns {void}
+     */
+    function enquadrar(mapa, camadas, forcar = false) {
+        if ((mapa._jaEnquadrado && !forcar) || mapa.getSize().x === 0) return;
+        const limites = L.featureGroup(camadas).getBounds();
         if (limites.isValid()) {
-            map.fitBounds(limites.pad(0.01));
-            jaEnquadrou = true;
+            mapa.fitBounds(limites.pad(0.02));
+            mapa._jaEnquadrado = true;
         }
     }
 
     GeoMAPA.map = {
-        init,
-        setMapaBase,
-        // O Leaflet precisa recalcular o tamanho quando a aba do mapa volta a aparecer.
-        invalidateSize() {
-            if (!map) return;
-            setTimeout(() => { map.invalidateSize(); enquadrar(); }, 10);
+        criarMapa,
+        criarPainel,
+        htmlLegenda,
+        enquadrar,
+
+        /**
+         * Recalcula o tamanho dos mapas quando uma aba volta a aparecer.
+         * @param {Function} [depois] Função chamada em seguida (ex.: enquadrar os dados).
+         * @returns {void}
+         */
+        atualizarTamanho(depois) {
+            setTimeout(() => {
+                mapas.forEach(m => m.invalidateSize());
+                if (depois) depois();
+            }, 10);
         }
     };
 })();
