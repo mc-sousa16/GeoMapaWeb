@@ -2,7 +2,7 @@
  * layers.js: CARREGAMENTO DOS GEOJSON E CÁLCULOS ESPACIAIS
  *
  * Lê os arquivos cadastrados em config.js, acrescenta a cada feição as
- * propriedades que o site usa (classe, municipio, area_km2, atingido) e guarda o estado
+ * propriedades que o site usa (classe, grau, municipio, area_km2, categoria) e guarda o estado
  * dos filtros que as abas compartilham. Normalmente não precisa ser editado.
  */
 (function () {
@@ -126,22 +126,77 @@
     }
 
     /**
-     * Descobre em qual polígono de suscetibilidade cai um ponto. Se cair em mais de um,
-     * fica com o de grau mais grave.
+     * Remove acentos e passa para minúsculas, para comparar textos digitados de jeitos diferentes.
+     * @param {*} texto Valor qualquer.
+     * @returns {string} Texto normalizado (ex.: "Saúde" -> "saude").
+     */
+    function normalizar(texto) {
+        return String(texto == null ? '' : texto).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+    }
+
+    /**
+     * Descobre a classe de estabilidade (S1, S2 ou S3) de um polígono, na ordem:
+     * coluna de classe -> valor de IS -> grau de risco.
+     * @param {Object} p Propriedades do polígono.
+     * @param {Object} camada Cadastro da camada em config.js.
+     * @returns {Object|null} Classe de config.suscetibilidade.classes, ou null se não der para classificar.
+     */
+    function classificar(p, camada) {
+        const classes = config.suscetibilidade.classes;
+        const texto = camada.campoClasse ? normalizar(p[camada.campoClasse]) : '';
+        if (texto) {
+            // Aceita "S3: Instável", "S3 - Instavel", "s3" ou só "Instável".
+            const porCodigo = classes.find(c => texto.startsWith(normalizar(c.nome.split(':')[0])));
+            const porNome = classes.find(c => texto.includes(normalizar(c.nome.split(':')[1])));
+            if (porCodigo || porNome) return porCodigo || porNome;
+        }
+        const is = camada.campoIS ? parseFloat(String(p[camada.campoIS]).replace(',', '.')) : NaN;
+        if (!isNaN(is)) return classes.find(c => is >= c.isMinimo) || null;
+        const grau = camada.campoGrau ? normalizar(p[camada.campoGrau]) : '';
+        if (grau) return classes.find(c => c.graus.some(g => normalizar(g) === grau)) || null;
+        return null;
+    }
+
+    /**
+     * Descobre o grau de risco de um polígono: usa a coluna de grau se existir,
+     * senão o primeiro grau da classe de estabilidade.
+     * @param {Object} p Propriedades do polígono.
+     * @param {Object} camada Cadastro da camada em config.js.
+     * @param {Object|null} classe Classe já descoberta por classificar().
+     * @returns {string} Grau de risco (ex.: "Alto"), ou "" se desconhecido.
+     */
+    function grauDeRisco(p, camada, classe) {
+        const valor = camada.campoGrau ? p[camada.campoGrau] : null;
+        if (valor) {
+            const conhecido = config.suscetibilidade.classes.flatMap(c => c.graus).find(g => normalizar(g) === normalizar(valor));
+            return conhecido || String(valor);
+        }
+        return classe ? classe.graus.join(' / ') : '';
+    }
+
+    /**
+     * Encontra a categoria (Educação, Saúde...) de um tipo de equipamento.
+     * @param {string} tipo Valor da coluna "tipo" do GeoJSON.
+     * @returns {{nome: string, cor: string}} Categoria de config.js, ou "Outros".
+     */
+    function categoriaDoTipo(tipo) {
+        const eq = config.suscetibilidade.equipamentos;
+        const t = normalizar(tipo);
+        return eq.categorias.find(c => c.tipos.some(v => normalizar(v) === t))
+            || { nome: 'Outros', cor: eq.corOutros };
+    }
+
+    /**
+     * Lista os polígonos de suscetibilidade que contêm um ponto.
      * @param {Array<number>} ponto [longitude, latitude].
      * @param {Array<Object>} poligonos Feições de suscetibilidade já preparadas.
-     * @returns {Object|null} Feição de suscetibilidade, ou null se o ponto estiver fora de todas.
+     * @returns {Array<Object>} Feições que contêm o ponto (normalmente uma só).
      */
-    function poligonoDoPonto([x, y], poligonos) {
-        const ordem = config.suscetibilidade.classes.map(c => c.nome);
-        let escolhido = null;
-        poligonos.forEach(f => {
+    function poligonosDoPonto([x, y], poligonos) {
+        return poligonos.filter(f => {
             const [x0, y0, x1, y1] = f.properties._caixa;
-            if (x < x0 || x > x1 || y < y0 || y > y1) return;
-            if (!pontoNaGeometria([x, y], f.geometry)) return;
-            if (!escolhido || ordem.indexOf(f.properties.classe) < ordem.indexOf(escolhido.properties.classe)) escolhido = f;
+            return x >= x0 && x <= x1 && y >= y0 && y <= y1 && pontoNaGeometria([x, y], f.geometry);
         });
-        return escolhido;
     }
 
     /**
@@ -155,34 +210,46 @@
             baixarGeoJSON(s.equipamentos.arquivo)
         ]);
 
-        // Suscetibilidade: classe, município, área e população de cada polígono.
+        // Suscetibilidade: classe, grau, município, área e população de cada polígono.
         s.camadas.forEach((camada, i) => {
             colecoes[i].features.forEach(f => {
                 const p = f.properties = f.properties || {};
-                const valor = p[camada.campoClasse];
-                p.classe = camada.mapeamentoClasse ? camada.mapeamentoClasse[valor] : valor;
-                p.municipio = (camada.campoMunicipio && p[camada.campoMunicipio]) || camada.municipio;
+                const classe = classificar(p, camada);
+                p.classe = classe ? classe.nome : 'Sem classe';
+                p.grau = grauDeRisco(p, camada, classe);
+                p.municipio = (camada.campoMunicipio && p[camada.campoMunicipio]) || camada.municipio || 'Sem município';
                 p.area_km2 = areaKm2(f.geometry);
-                p.populacao_estimada = Number(p[camada.campoPopulacao]) || 0;
+                p.populacao_estimada = Number(camada.campoPopulacao && p[camada.campoPopulacao]) || 0;
                 p.camada = camada.id;
                 p._caixa = retangulo(f.geometry);
             });
         });
         GeoMAPA.layers.suscetibilidade = colecoes.flatMap(g => g.features);
+        const semClasse = GeoMAPA.layers.suscetibilidade.filter(f => f.properties.classe === 'Sem classe').length;
+        if (semClasse) GeoMAPA.layers.avisos.push(`${semClasse} polígono(s) sem classe de estabilidade, IS ou grau de risco reconhecível. Confira os campo* da camada em js/config.js.`);
         GeoMAPA.layers.municipios = [...new Set(GeoMAPA.layers.suscetibilidade.map(f => f.properties.municipio))].sort();
         GeoMAPA.layers.temPopulacao = GeoMAPA.layers.suscetibilidade.some(f => f.properties.populacao_estimada > 0);
 
-        // Equipamentos públicos: tipo, nome e o grau de suscetibilidade do local onde estão.
+        // Equipamentos públicos: categoria e polígonos de suscetibilidade onde estão (spatial join).
+        // Se o ponto cair em mais de um polígono, fica o mais grave (ordem de config.classes).
+        const ordem = s.classes.map(c => c.nome);
         GeoMAPA.layers.equipamentos = equipamentos.features.filter(f => f.geometry && f.geometry.type === 'Point');
         GeoMAPA.layers.equipamentos.forEach(f => {
             const p = f.properties = f.properties || {};
-            p.tipo = String(p[s.equipamentos.campoTipo] || '').toLowerCase();
-            p.nome = p[s.equipamentos.campoNome] || 'Equipamento';
-            const poligono = poligonoDoPonto(f.geometry.coordinates, GeoMAPA.layers.suscetibilidade);
-            p.classe = poligono ? poligono.properties.classe : null;
-            p.municipio = poligono ? poligono.properties.municipio : null;
-            p.atingido = !!poligono && s.classesDeRisco.includes(p.classe);
+            const categoria = categoriaDoTipo(p.tipo);
+            p.categoria = categoria.nome;
+            p.cor = categoria.cor;
+            p.nome = p.nome || 'Equipamento sem nome';
+            const zona = poligonosDoPonto(f.geometry.coordinates, GeoMAPA.layers.suscetibilidade)
+                .sort((a, b) => ordem.indexOf(a.properties.classe) - ordem.indexOf(b.properties.classe))[0];
+            p.classe = zona ? zona.properties.classe : null;
+            p.grau = zona ? zona.properties.grau : null;
+            p.municipio = p.municipio || (zona ? zona.properties.municipio : null);
         });
+        GeoMAPA.layers.categorias = [...s.equipamentos.categorias];
+        if (GeoMAPA.layers.equipamentos.some(e => e.properties.categoria === 'Outros')) {
+            GeoMAPA.layers.categorias.push({ nome: 'Outros', cor: s.equipamentos.corOutros });
+        }
     }
 
     // Estado compartilhado entre as abas, com aviso para quem quiser reagir a mudanças.
@@ -191,13 +258,15 @@
         municipio: 'todos',
         classes: config.suscetibilidade.classes.map(c => c.nome),
         opacidade: 0.7,
-        tiposEquipamento: config.suscetibilidade.equipamentos.tipos.map(t => t.valor)
+        categorias: config.suscetibilidade.equipamentos.categorias.map(c => c.nome).concat('Outros'),
+        incluirOpcionais: false
     };
 
     GeoMAPA.layers = {
         avisos: [],
         suscetibilidade: [],
         equipamentos: [],
+        categorias: [],
         municipios: [],
         temPopulacao: false,
         estado,
@@ -214,13 +283,34 @@
 
         /**
          * Altera um filtro e avisa as abas.
-         * @param {string} nome Chave do estado (municipio, classes, opacidade, tiposEquipamento).
+         * @param {string} nome Chave do estado (municipio, classes, opacidade, categorias, incluirOpcionais).
          * @param {*} valor Novo valor.
          * @returns {void}
          */
         definir(nome, valor) {
             estado[nome] = valor;
             ouvintes.forEach(fn => fn(estado));
+        },
+
+        /**
+         * Classes e graus que contam como risco agora (classesDeRisco + opcionais, se o seletor estiver marcado).
+         * @returns {Array<string>} Nomes de classes e graus.
+         */
+        classesDeRiscoAtivas() {
+            const s = config.suscetibilidade;
+            return estado.incluirOpcionais ? s.classesDeRisco.concat(s.classesDeRiscoOpcionais) : s.classesDeRisco;
+        },
+
+        /**
+         * Informa se uma área (ou equipamento) está em classe de risco ativa,
+         * pela classe de estabilidade ou pelo grau de risco.
+         * @param {Object} p Propriedades com "classe" e "grau".
+         * @returns {boolean} true se for de risco.
+         */
+        ehRisco(p) {
+            const ativas = this.classesDeRiscoAtivas().map(normalizar);
+            const graus = String(p.grau || '').split('/').map(normalizar);
+            return ativas.includes(normalizar(p.classe)) || graus.some(g => ativas.includes(g));
         },
 
         /**
@@ -233,7 +323,7 @@
         },
 
         /**
-         * Polígonos de suscetibilidade que passam pelos filtros de município e grau.
+         * Polígonos de suscetibilidade que passam pelos filtros de município e classe (mapa).
          * @returns {Array<Object>} Feições GeoJSON.
          */
         suscetibilidadeFiltrada() {
@@ -241,13 +331,27 @@
         },
 
         /**
-         * Equipamentos públicos dos tipos marcados, no município escolhido.
-         * Equipamentos fora de qualquer polígono só aparecem com "Todos os municípios".
+         * Polígonos do município escolhido que estão nas classes de risco ativas (aba Gestão).
+         * @returns {Array<Object>} Feições GeoJSON.
+         */
+        areasDeRisco() {
+            return this.suscetibilidade.filter(f => this.noMunicipio(f) && this.ehRisco(f.properties));
+        },
+
+        /**
+         * Equipamentos públicos das categorias marcadas, no município escolhido.
          * @returns {Array<Object>} Feições de ponto.
          */
         equipamentosFiltrados() {
-            return this.equipamentos.filter(f => estado.tiposEquipamento.includes(f.properties.tipo) &&
-                (estado.municipio === 'todos' || f.properties.municipio === estado.municipio));
+            return this.equipamentos.filter(f => estado.categorias.includes(f.properties.categoria) && this.noMunicipio(f));
+        },
+
+        /**
+         * Equipamentos filtrados que estão em área de risco ativa (equipamentos atingidos).
+         * @returns {Array<Object>} Feições de ponto.
+         */
+        equipamentosAtingidos() {
+            return this.equipamentosFiltrados().filter(f => f.properties.classe && this.ehRisco(f.properties));
         }
     };
 })();

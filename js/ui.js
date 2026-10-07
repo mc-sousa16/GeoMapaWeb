@@ -4,6 +4,15 @@
 (function () {
     GeoMAPA.ui = {
         /**
+         * Protege um texto vindo dos dados antes de colocá-lo em HTML (popups, legendas).
+         * @param {*} texto Valor qualquer.
+         * @returns {string} Texto com <, >, & e aspas escapados.
+         */
+        esc(texto) {
+            return String(texto == null ? '' : texto).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        },
+
+        /**
          * Cria um <label> com checkbox ou radio.
          * @param {Object} opcoes
          * @param {string} opcoes.type 'checkbox' ou 'radio'.

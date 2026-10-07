@@ -88,7 +88,7 @@
                     <button data-target="suscetibilidade" class="nav-button text-left bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                         <p class="text-2xl mb-2" aria-hidden="true">🗻</p>
                         <h4 class="font-bold mb-1">Suscetibilidade Geológica</h4>
-                        <p class="text-sm text-secundaria">Escolha o município e os graus de suscetibilidade a escorregamentos que quer ver no mapa, e veja quais escolas, postos de saúde e abrigos estão em áreas de risco.</p>
+                        <p class="text-sm text-secundaria">Escolha o município e as classes de estabilidade (S1, S2, S3) que quer ver no mapa, e veja quais escolas, unidades de saúde e abrigos estão em áreas de risco.</p>
                     </button>
                     <button data-target="gestao" class="nav-button text-left bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                         <p class="text-2xl mb-2" aria-hidden="true">📊</p>
@@ -142,7 +142,7 @@
                             </select>
                         </div>
                         <fieldset class="space-y-2">
-                            <legend class="panel-title mb-2">Grau de Suscetibilidade</legend>
+                            <legend class="panel-title mb-2">Classe de Estabilidade</legend>
                             <div id="filtro-classes" class="space-y-2 text-sm"></div>
                         </fieldset>
                         <fieldset class="space-y-2">
@@ -162,15 +162,15 @@
                 </aside>
                 <div class="flex-1 p-4 md:p-8 lg:p-10 overflow-auto">
                     <h2 class="text-3xl font-bold mb-2">Suscetibilidade Geológica</h2>
-                    <p class="text-secundaria mb-6 max-w-4xl">Suscetibilidade a escorregamentos e movimentos de massa. Use o painel ao lado para escolher o município, os graus e os equipamentos públicos exibidos. Equipamentos com contorno preto estão em área de risco. O botão de Análise Inteligente gera um relatório técnico sobre as áreas visíveis.</p>
+                    <p class="text-secundaria mb-6 max-w-4xl">Suscetibilidade a escorregamentos e movimentos de massa, classificada pela metodologia GeoMAPA (Soares Jr. et al., 2022) em S1: Estável, S2: Pouco Estável e S3: Instável. Use o painel ao lado para escolher o município, as classes e os equipamentos públicos exibidos. Equipamentos com contorno preto estão em área de risco. O botão de Análise Inteligente gera um relatório técnico sobre as áreas visíveis.</p>
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-md">
                             <div id="mapa-suscetibilidade" class="h-96 md:h-[60vh] rounded-lg" role="region" aria-label="Mapa de suscetibilidade geológica"></div>
                         </div>
                         <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-md flex flex-col items-center justify-center">
-                            <h3 class="font-bold text-lg mb-2 text-center">Área por grau de suscetibilidade (km²)</h3>
+                            <h3 class="font-bold text-lg mb-2 text-center">Área por classe de estabilidade (km²)</h3>
                             <div class="chart-container">
-                                <canvas id="grafico-suscetibilidade" aria-label="Gráfico de área por grau de suscetibilidade" role="img"></canvas>
+                                <canvas id="grafico-suscetibilidade" aria-label="Gráfico de área por classe de estabilidade" role="img"></canvas>
                                 <p class="chart-empty hidden">Nenhuma área para exibir com os filtros atuais.</p>
                             </div>
                         </div>
@@ -190,16 +190,25 @@
         <!-- ABA GESTÃO E TOMADA DE DECISÃO (js/gestao.js)                 -->
         <!-- ============================================================ -->
         <section id="gestao" class="page-section hidden container mx-auto px-6 py-12">
-            <div class="flex flex-wrap justify-between items-start gap-4 mb-8">
+            <div class="flex flex-wrap justify-between items-start gap-4 mb-6">
                 <div>
                     <h2 class="text-3xl font-bold mb-2">Gestão e Tomada de Decisão</h2>
-                    <p class="text-secundaria max-w-3xl">Indicadores para gestores públicos e Defesa Civil. Os números seguem o município, os graus e os equipamentos escolhidos na aba Suscetibilidade.</p>
+                    <p class="text-secundaria max-w-3xl">Indicadores para gestores públicos e Defesa Civil. Os números seguem o município escolhido na aba Suscetibilidade e as classes de risco abaixo.</p>
                 </div>
                 <button id="imprimir-relatorio" class="no-print bg-principal text-white font-bold py-2 px-4 rounded-lg hover:bg-principal/90">Imprimir / salvar PDF</button>
             </div>
 
+            <!-- Seletor das classes de risco (classesDeRisco em js/config.js) -->
+            <div class="bg-white p-4 rounded-xl shadow-md mb-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <p><span class="font-semibold">Classes de risco ativas:</span> <span id="classes-risco-ativas"></span></p>
+                <label class="no-print flex items-center space-x-2 cursor-pointer">
+                    <input id="incluir-opcionais" type="checkbox" class="h-4 w-4" style="accent-color:#FFB74D">
+                    <span id="rotulo-opcionais"></span>
+                </label>
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-risco-alto">
+                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-700">
                     <p class="panel-title">Área de risco afetada</p>
                     <p id="kpi-area-risco" class="text-2xl font-bold mt-2">–</p>
                     <p id="kpi-area-risco-nota" class="text-xs text-secundaria mt-1"></p>
@@ -207,7 +216,7 @@
                 <div class="bg-white p-5 rounded-xl shadow-md">
                     <p class="panel-title">Área mapeada</p>
                     <p id="kpi-area-total" class="text-2xl font-bold mt-2">–</p>
-                    <p class="text-xs text-secundaria mt-1">Todos os graus selecionados</p>
+                    <p class="text-xs text-secundaria mt-1">Todas as classes, no município escolhido</p>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-md">
                     <p class="panel-title">Equipamentos atingidos</p>
@@ -223,16 +232,16 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <div class="bg-white p-4 rounded-xl shadow-md">
-                    <h3 class="font-bold text-lg mb-2">Área por grau de suscetibilidade em cada município</h3>
+                    <h3 class="font-bold text-lg mb-2">Área por classe de estabilidade em cada município</h3>
                     <div class="chart-container wide">
-                        <canvas id="grafico-gestao-municipios" role="img" aria-label="Gráfico de área por grau de suscetibilidade em cada município"></canvas>
+                        <canvas id="grafico-gestao-municipios" role="img" aria-label="Gráfico de área por classe de estabilidade em cada município"></canvas>
                         <p class="chart-empty hidden">Cadastre camadas de suscetibilidade em js/config.js para ver este gráfico.</p>
                     </div>
                 </div>
                 <div class="bg-white p-4 rounded-xl shadow-md">
-                    <h3 class="font-bold text-lg mb-2">Equipamentos públicos por grau de suscetibilidade</h3>
+                    <h3 class="font-bold text-lg mb-2">Equipamentos públicos por classe de estabilidade</h3>
                     <div class="chart-container wide">
-                        <canvas id="grafico-gestao-equipamentos" role="img" aria-label="Gráfico de equipamentos públicos por grau de suscetibilidade"></canvas>
+                        <canvas id="grafico-gestao-equipamentos" role="img" aria-label="Gráfico de equipamentos públicos por classe de estabilidade"></canvas>
                         <p class="chart-empty hidden">Cadastre os equipamentos públicos em data/equipamentos_publicos.geojson para ver este gráfico.</p>
                     </div>
                 </div>
@@ -240,33 +249,32 @@
 
             <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto mb-8">
                 <div class="flex justify-between items-center mb-2">
-                    <h3 class="font-bold text-lg">Prioridade de atuação por município</h3>
-                    <button id="exportar-prioridades" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
+                    <h3 class="font-bold text-lg">Equipamentos em área de risco</h3>
+                    <button id="exportar-equipamentos" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
                 </div>
                 <table class="w-full text-sm">
                     <thead class="text-left text-secundaria">
-                        <tr><th class="p-3">#</th><th class="p-3">Município</th><th class="p-3 text-right">Área de risco (km²)</th><th class="p-3 text-right">% em risco</th><th class="p-3 text-right">Equipamentos atingidos</th><th class="p-3 text-right">População exposta</th></tr>
+                        <tr><th class="p-3">Nome</th><th class="p-3">Tipo</th><th class="p-3">Município</th><th class="p-3">Classe de Estabilidade</th><th class="p-3">Grau de Risco</th><th class="p-3">Fonte</th></tr>
                     </thead>
-                    <tbody id="tabela-prioridades"></tbody>
+                    <tbody id="tabela-equipamentos"></tbody>
                 </table>
-                <p class="text-xs text-secundaria mt-2">Área de risco = soma das classes listadas em classesDeRisco (js/config.js).</p>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-md overflow-x-auto">
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold text-lg">Equipamentos em área de risco</h3>
-                        <button id="exportar-equipamentos" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
+                        <h3 class="font-bold text-lg">Prioridade de atuação por município</h3>
+                        <button id="exportar-prioridades" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
                     </div>
                     <table class="w-full text-sm">
                         <thead class="text-left text-secundaria">
-                            <tr><th class="p-3">Equipamento</th><th class="p-3">Tipo</th><th class="p-3">Município</th><th class="p-3">Suscetibilidade</th></tr>
+                            <tr><th class="p-3">#</th><th class="p-3">Município</th><th class="p-3 text-right">Área de risco (km²)</th><th class="p-3 text-right">% em risco</th><th class="p-3 text-right">Equipamentos atingidos</th><th class="p-3 text-right">População exposta</th></tr>
                         </thead>
-                        <tbody id="tabela-equipamentos"></tbody>
+                        <tbody id="tabela-prioridades"></tbody>
                     </table>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-md">
-                    <h3 class="font-bold text-lg mb-4">Ações recomendadas por grau de suscetibilidade</h3>
+                <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-md">
+                    <h3 class="font-bold text-lg mb-4">Ações recomendadas por classe</h3>
                     <ul id="gestao-acoes" class="space-y-4"></ul>
                 </div>
             </div>
@@ -287,14 +295,14 @@
                         <li><b>Formato:</b> GeoJSON.</li>
                         <li><b>SRC:</b> <b>EPSG:4326 - WGS 84</b>. Esse passo é obrigatório; em outro sistema o site não consegue desenhar a camada e mostra um aviso.</li>
                         <li>Use nomes de arquivo sem espaços nem acentos, por exemplo <code>diadema_suscetibilidade.geojson</code>.</li>
-                        <li>Anote o nome da coluna que guarda a classe (ex.: <code>classe</code> ou <code>value</code>). Ela será usada no passo 3.</li>
+                        <li>Confira os nomes das colunas. O padrão do laboratório é <code>municipio</code>, <code>is_valor</code>, <code>classe_estabilidade</code>, <code>grau_risco</code> e <code>populacao</code> para a suscetibilidade, e <code>id</code>, <code>nome</code>, <code>tipo</code>, <code>municipio</code>, <code>endereco</code> e <code>fonte</code> para os equipamentos.</li>
                     </ul>
                 </li>
                 <li class="bg-white p-6 rounded-xl shadow-md">
                     <h3 class="font-bold text-lg mb-2">2. Coloque o arquivo na pasta <code>data/</code></h3>
                     <ul class="list-disc list-inside text-secundaria space-y-1">
                         <li>Suscetibilidade geológica: <code>data/geologico/</code></li>
-                        <li>Equipamentos públicos (pontos com as colunas <code>tipo</code> e <code>nome</code>): <code>data/equipamentos_publicos.geojson</code></li>
+                        <li>Equipamentos públicos (pontos): substitua <code>data/equipamentos_publicos.geojson</code></li>
                         <li>Pelo GitHub na web: abra a pasta, clique em <b>Add file &gt; Upload files</b> e arraste o arquivo.</li>
                     </ul>
                 </li>
@@ -302,13 +310,17 @@
                     <h3 class="font-bold text-lg mb-2">3. Cadastre a camada em <code>js/config.js</code></h3>
                     <p class="text-secundaria mb-2">Copie um bloco existente da lista <code>camadas</code> e troque os valores:</p>
 <pre class="bg-fundo border rounded-md p-4 text-xs overflow-x-auto"><code>{
-    id: 'diadema_suscetibilidade',          // nome único, sem espaços
+    id: 'mairipora_suscetibilidade',        // nome único, sem espaços
     nome: 'Suscetibilidade a escorregamentos',
-    arquivo: 'data/geologico/diadema_suscetibilidade.geojson',
-    municipio: 'Diadema',                   // aparece no seletor de município
-    campoClasse: 'classe'                   // coluna com o grau no GeoJSON
+    arquivo: 'data/geologico/mairipora_suscetibilidade.geojson',
+    municipio: null,                        // ou o nome, se a camada não tiver coluna de município
+    campoMunicipio: 'municipio',            // coluna com o município
+    campoClasse: 'classe_estabilidade',     // "S1: Estável", "S2: Pouco Estável" ou "S3: Instável"
+    campoIS: 'is_valor',                    // Índice de Suscetibilidade (1,0 a 5,0)
+    campoGrau: 'grau_risco',                // "Baixo", "Moderado", "Alto"...
+    campoPopulacao: 'populacao'             // população residente (IBGE)
 },</code></pre>
-                    <p class="text-secundaria mt-2">Se a coluna guardar números (1, 2, 3, 4), acrescente <code>mapeamentoClasse: { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Muito Alta' }</code>. Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em <code>campoPopulacao</code> para a aba Gestão estimar a população exposta. A nova camada aparece sozinha no seletor, na legenda e na aba Gestão.</p>
+                    <p class="text-secundaria mt-2">Se uma coluna não existir no seu arquivo, escreva <code>null</code>. Sem a classe, o site calcula S1, S2 ou S3 a partir do <code>is_valor</code>; sem os dois, usa o <code>grau_risco</code>. A nova camada aparece sozinha no seletor de município, na legenda e na aba Gestão.</p>
                 </li>
                 <li class="bg-white p-6 rounded-xl shadow-md">
                     <h3 class="font-bold text-lg mb-2">4. Teste antes de publicar</h3>
@@ -325,6 +337,30 @@
                     <p class="text-secundaria">Faça o commit no GitHub. O GitHub Pages atualiza o site em poucos minutos.</p>
                 </li>
             </ol>
+
+            <!-- Resumo da metodologia: atualize aqui se o laboratório mudar pesos ou limites. -->
+            <div class="bg-white p-6 rounded-xl shadow-md mt-10">
+                <h3 class="font-bold text-lg mb-2">Metodologia de mapeamento (Soares Jr. et al., 2022)</h3>
+                <p class="text-secundaria mb-3">As cartas seguem a Combinação Qualitativa de Mapas por Matriz Multicritérios e Pesos. O Índice de Suscetibilidade de cada unidade é <b>IS = Σ (Ri × Pij)</b>, em que Ri é o grau (1 a 5) de cada fator e Pij o seu peso:</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm mb-4">
+                        <thead class="text-left text-secundaria"><tr><th class="p-2">Fator condicionante</th><th class="p-2 text-right">Peso</th></tr></thead>
+                        <tbody>
+                            <tr class="border-t"><td class="p-2">Declividade</td><td class="p-2 text-right">40%</td></tr>
+                            <tr class="border-t"><td class="p-2">Litologia</td><td class="p-2 text-right">20%</td></tr>
+                            <tr class="border-t"><td class="p-2">Uso e ocupação do solo</td><td class="p-2 text-right">20%</td></tr>
+                            <tr class="border-t"><td class="p-2">Curvatura vertical (morfologia)</td><td class="p-2 text-right">10%</td></tr>
+                            <tr class="border-t"><td class="p-2">Densidade de lineamentos estruturais</td><td class="p-2 text-right">10%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-secundaria mb-2">O IS é agrupado em três classes consolidadas (Crozier, 1986 / GeoMAPA), as mesmas usadas no mapa e na aba Gestão:</p>
+                <ul class="list-disc list-inside text-secundaria space-y-1">
+                    <li><b>S1: Estável</b> (IS &lt; 2,99): graus Muito Baixo e Baixo.</li>
+                    <li><b>S2: Pouco Estável</b> (2,99 ≤ IS &lt; 3,53): grau Moderado.</li>
+                    <li><b>S3: Instável</b> (IS ≥ 3,53): graus Alto e Muito Alto.</li>
+                </ul>
+            </div>
         </section>
 
         <!-- ============================================================ -->
