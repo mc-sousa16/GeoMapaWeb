@@ -2,7 +2,7 @@
  * map.js: FUNÇÕES COMUNS DOS MAPAS LEAFLET
  *
  * Cria os mapas das abas com o seletor de mapa de fundo, a escala e os
- * painéis de legenda. As abas (suscetibilidade.js e costeiro.js) usam estas funções.
+ * painéis de legenda. A aba Suscetibilidade (suscetibilidade.js) usa estas funções.
  */
 (function () {
     const config = GeoMAPA.config;
@@ -48,12 +48,13 @@
     /**
      * Monta o HTML de uma legenda com quadradinhos coloridos.
      * @param {string} titulo Título da legenda.
-     * @param {Array<{nome: string, cor: string}>} itens Classes exibidas.
+     * @param {Array<{nome: string, cor: string, redondo: boolean}>} itens Classes exibidas
+     *        (redondo = true desenha um círculo, para pontos).
      * @returns {string} HTML da legenda.
      */
     function htmlLegenda(titulo, itens) {
         return `<strong>${titulo}</strong>` + itens.map(i =>
-            `<div><span style="background:${i.cor}"></span>${i.nome}</div>`).join('');
+            `<div><span style="background:${i.cor}${i.redondo ? ';border-radius:50%' : ''}"></span>${i.nome}</div>`).join('');
     }
 
     /**

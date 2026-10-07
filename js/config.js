@@ -4,7 +4,7 @@
  * Este é o arquivo que um novo aluno do laboratório mais vai editar.
  * Para uma nova camada aparecer no site:
  *   1. Exporte o GeoJSON no QGIS em EPSG:4326 (WGS 84).
- *   2. Salve o arquivo em data/geologico/ ou data/costeiro/.
+ *   2. Salve o arquivo em data/geologico/.
  *   3. Copie um dos blocos de camada abaixo e troque o caminho (arquivo) e o nome.
  * Nada mais precisa ser alterado: menus, filtros, legendas e gráficos se montam sozinhos.
  */
@@ -49,7 +49,8 @@ GeoMAPA.config = {
             { nome: 'Média', cor: '#FFB74D' },
             { nome: 'Baixa', cor: '#81C784' }
         ],
-        // Classes somadas no indicador "área de risco" da aba Gestão.
+        // Classes consideradas "de risco" na aba Gestão: somadas na área de risco e usadas
+        // para dizer se um equipamento público foi atingido e quanta população está exposta.
         classesDeRisco: ['Muito Alta', 'Alta'],
 
         // --- PONTO DE CUSTOMIZAÇÃO: CAMADAS DE SUSCETIBILIDADE --- //
@@ -59,6 +60,8 @@ GeoMAPA.config = {
         // campoClasse: coluna do GeoJSON com o grau de suscetibilidade.
         // mapeamentoClasse: converte o valor da coluna no nome da classe
         //                   (apague se a coluna já vier escrita como "Alta", "Média"...).
+        // campoPopulacao (opcional): coluna com a população residente em cada polígono,
+        //                   usada na estimativa de população exposta da aba Gestão.
         camadas: [
             {
                 id: 'biritiba_mirim_suscetibilidade',
@@ -67,7 +70,8 @@ GeoMAPA.config = {
                 municipio: 'Biritiba Mirim',
                 campoMunicipio: null,
                 campoClasse: 'value',
-                mapeamentoClasse: { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Muito Alta' }
+                mapeamentoClasse: { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Muito Alta' },
+                campoPopulacao: 'populacao'
             }
             // Exemplo de nova camada:
             // {
@@ -77,49 +81,19 @@ GeoMAPA.config = {
             //     municipio: 'Diadema',
             //     campoClasse: 'classe'
             // }
-        ]
-    },
-
-    // =====================================================================
-    // ABA RISCO COSTEIRO E INUNDAÇÃO
-    // =====================================================================
-    costeiro: {
-        // --- PONTO DE CUSTOMIZAÇÃO: VISTA INICIAL --- //
-        centro: [-10.95, -37.07], // Aracaju-SE
-        zoom: 12,
-        corInundacao: '#1E88E5',
-
-        // --- PONTO DE CUSTOMIZAÇÃO: CENÁRIOS DE ELEVAÇÃO DO NÍVEL DO MAR --- //
-        // Um arquivo GeoJSON por cenário, com os polígonos da área inundada.
-        // campoPopulacao (opcional): coluna com a população residente em cada polígono,
-        // usada na estimativa de população exposta da aba Gestão.
-        cenarios: [
-            {
-                id: 'aracaju_0_5m',
-                nome: '+0,5 m',
-                descricao: 'Elevação de 0,5 m do nível médio do mar',
-                arquivo: 'data/costeiro/aracaju_inundacao_0_5m.geojson',
-                campoPopulacao: 'populacao'
-            },
-            {
-                id: 'aracaju_1_0m',
-                nome: '+1,0 m',
-                descricao: 'Elevação de 1,0 m do nível médio do mar',
-                arquivo: 'data/costeiro/aracaju_inundacao_1_0m.geojson',
-                campoPopulacao: 'populacao'
-            }
         ],
 
         // --- PONTO DE CUSTOMIZAÇÃO: EQUIPAMENTOS PÚBLICOS --- //
-        // GeoJSON de pontos. campoTipo é a coluna que diz se é escola, saúde ou abrigo,
-        // e campoNome a coluna com o nome exibido no popup.
+        // GeoJSON de pontos (escolas, postos de saúde, abrigos...). O site verifica em qual
+        // grau de suscetibilidade cada ponto cai e conta como "atingido" quem estiver nas classesDeRisco.
+        // campoTipo: coluna que diz o tipo do equipamento; campoNome: coluna com o nome.
         equipamentos: {
-            arquivo: 'data/costeiro/aracaju_equipamentos.geojson',
+            arquivo: 'data/equipamentos_publicos.geojson',
             campoTipo: 'tipo',
             campoNome: 'nome',
             tipos: [
                 { valor: 'escola', nome: 'Escolas', cor: '#6A1B9A' },
-                { valor: 'saude', nome: 'Postos de Saúde', cor: '#C62828' },
+                { valor: 'saude', nome: 'Postos de Saúde', cor: '#1565C0' },
                 { valor: 'abrigo', nome: 'Abrigos', cor: '#2E7D32' }
             ]
         }

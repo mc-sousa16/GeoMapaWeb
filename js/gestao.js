@@ -2,35 +2,61 @@
  * gestao.js: ABA GESTÃO E TOMADA DE DECISÃO
  *
  * Painel com indicadores (KPIs), gráficos Chart.js e tabelas calculados a
- * partir dos mesmos GeoJSON dos mapas. Segue os filtros escolhidos nas abas
- * de mapa e permite imprimir/salvar em PDF ou exportar as tabelas em CSV.
+ * partir dos mesmos GeoJSON do mapa. Segue os filtros escolhidos na aba
+ * Suscetibilidade e permite imprimir/salvar em PDF ou exportar as tabelas em CSV.
  */
 (function () {
-    const config = GeoMAPA.config;
+    const config = GeoMAPA.config.suscetibilidade;
+    const acoesPorClasse = GeoMAPA.config.acoesPorClasse;
     const layers = GeoMAPA.layers;
     const { fmt, mostrarVazio } = GeoMAPA.ui;
     const { resumoPorClasse } = GeoMAPA.suscetibilidade;
+    const tipos = Object.fromEntries(config.equipamentos.tipos.map(t => [t.valor, t]));
 
     let graficoMunicipios;
-    let graficoCenarios;
+    let graficoEquipamentos;
     // Linhas atuais das tabelas, guardadas para a exportação em CSV.
     let linhasPrioridade = [];
-    let linhasCenarios = [];
+    let linhasEquipamentos = [];
 
     /**
-     * Agrupa os polígonos de suscetibilidade por município.
-     * @param {Array<Object>} features Feições filtradas.
-     * @returns {Array<{municipio: string, resumo: Object, total: number, risco: number}>}
-     *          Totais por município (risco = soma das classes de risco de config.js).
+     * Informa se uma classe entra na conta de risco (classesDeRisco em config.js).
+     * @param {string} classe Nome da classe.
+     * @returns {boolean} true se for classe de risco.
      */
-    function porMunicipio(features) {
+    function ehRisco(classe) {
+        return config.classesDeRisco.includes(classe);
+    }
+
+    /**
+     * Equipamentos atingidos que passam pelos filtros (tipo, município e grau marcados).
+     * @returns {Array<Object>} Feições de ponto.
+     */
+    function equipamentosAtingidos() {
+        return layers.equipamentosFiltrados().filter(e => e.properties.atingido && layers.estado.classes.includes(e.properties.classe));
+    }
+
+    /**
+     * Agrupa polígonos e equipamentos por município e calcula os totais de cada um.
+     * @param {Array<Object>} features Polígonos de suscetibilidade filtrados.
+     * @param {Array<Object>} atingidos Equipamentos atingidos filtrados.
+     * @returns {Array<{municipio: string, resumo: Object, total: number, risco: number, populacao: number, equipamentos: number}>}
+     *          Totais por município, do maior para o menor risco.
+     */
+    function porMunicipio(features, atingidos) {
         const grupos = {};
         features.forEach(f => { (grupos[f.properties.municipio] = grupos[f.properties.municipio] || []).push(f); });
         return Object.entries(grupos).map(([municipio, fs]) => {
             const resumo = resumoPorClasse(fs);
-            const total = Object.values(resumo).reduce((t, r) => t + r.area, 0);
-            const risco = config.suscetibilidade.classesDeRisco.reduce((t, c) => t + (resumo[c] ? resumo[c].area : 0), 0);
-            return { municipio, resumo, total, risco };
+            const deRisco = fs.filter(f => ehRisco(f.properties.classe));
+            return {
+                municipio,
+                resumo,
+                total: fs.reduce((t, f) => t + f.properties.area_km2, 0),
+                risco: deRisco.reduce((t, f) => t + f.properties.area_km2, 0),
+                populacao: deRisco.reduce((t, f) => t + f.properties.populacao_estimada, 0),
+                equipamentos: atingidos.filter(e => e.properties.municipio === municipio).length
+            };
         }).sort((a, b) => b.risco - a.risco);
     }
 
@@ -45,83 +71,83 @@
     }
 
     /**
-     * Atualiza os cinco indicadores do topo do painel.
+     * Atualiza os quatro indicadores do topo do painel.
      * @param {Array<Object>} municipios Resultado de porMunicipio().
+     * @param {Array<Object>} atingidos Equipamentos atingidos filtrados.
      * @returns {void}
      */
-    function atualizarIndicadores(municipios) {
+    function atualizarIndicadores(municipios, atingidos) {
         const total = municipios.reduce((t, m) => t + m.total, 0);
         const risco = municipios.reduce((t, m) => t + m.risco, 0);
-        kpi('kpi-area-risco', `${fmt(risco)} km²`);
-        kpi('kpi-pct-risco', total > 0 ? `${fmt(risco / total * 100, 1)}% da área mapeada` : 'Sem dados de suscetibilidade');
+        const populacao = municipios.reduce((t, m) => t + m.populacao, 0);
+        const classes = config.classesDeRisco.join(' e ');
 
-        const cenario = config.costeiro.cenarios.find(c => c.id === layers.estado.cenario);
-        const resumo = cenario ? layers.resumoCenario(cenario.id) : { area: 0, populacao: 0, temPopulacao: false };
-        const nomeCenario = cenario ? `Cenário ${cenario.nome}` : 'Nenhum cenário';
-        kpi('kpi-area-inundavel', `${fmt(resumo.area)} km²`);
-        kpi('kpi-area-inundavel-cenario', nomeCenario);
-        kpi('kpi-equipamentos', cenario ? String(layers.equipamentosAtingidos(cenario.id).length) : '0');
-        kpi('kpi-equipamentos-cenario', nomeCenario);
-        kpi('kpi-populacao', resumo.temPopulacao ? fmt(resumo.populacao, 0) : '–');
-        kpi('kpi-populacao-nota', resumo.temPopulacao ? nomeCenario : 'Sem coluna de população no GeoJSON');
+        kpi('kpi-area-risco', `${fmt(risco)} km²`);
+        kpi('kpi-area-risco-nota', total > 0 ? `${fmt(risco / total * 100, 1)}% da área mapeada (${classes})` : 'Sem dados de suscetibilidade');
+        kpi('kpi-area-total', `${fmt(total)} km²`);
+        kpi('kpi-equipamentos', atingidos.length.toLocaleString('pt-BR'));
+        kpi('kpi-equipamentos-nota', layers.equipamentos.length ? `de ${layers.equipamentosFiltrados().length} cadastrados, em áreas ${classes}` : 'Nenhum equipamento cadastrado');
+        kpi('kpi-populacao', layers.temPopulacao ? fmt(populacao, 0) : '–');
+        kpi('kpi-populacao-nota', layers.temPopulacao ? `Residentes em áreas ${classes}` : 'Sem coluna de população no GeoJSON');
     }
 
     /**
-     * Atualiza o gráfico de área por classe em cada município e a tabela de prioridades.
+     * Atualiza os dois gráficos.
      * @param {Array<Object>} municipios Resultado de porMunicipio().
      * @returns {void}
      */
-    function atualizarSuscetibilidade(municipios) {
+    function atualizarGraficos(municipios) {
         graficoMunicipios.data.labels = municipios.map(m => m.municipio);
-        graficoMunicipios.data.datasets = config.suscetibilidade.classes.map(c => ({
+        graficoMunicipios.data.datasets = config.classes.map(c => ({
             label: c.nome, backgroundColor: c.cor,
             data: municipios.map(m => +m.resumo[c.nome].area.toFixed(3))
         }));
         graficoMunicipios.update();
         mostrarVazio('grafico-gestao-municipios', municipios.length === 0);
 
+        // Equipamentos por grau de suscetibilidade do local, empilhados por tipo.
+        const equipamentos = layers.equipamentosFiltrados().filter(e => e.properties.classe && layers.estado.classes.includes(e.properties.classe));
+        graficoEquipamentos.data.labels = config.classes.map(c => c.nome);
+        graficoEquipamentos.data.datasets = config.equipamentos.tipos.map(t => ({
+            label: t.nome, backgroundColor: t.cor,
+            data: config.classes.map(c => equipamentos.filter(e => e.properties.tipo === t.valor && e.properties.classe === c.nome).length)
+        }));
+        graficoEquipamentos.update();
+        mostrarVazio('grafico-gestao-equipamentos', equipamentos.length === 0);
+    }
+
+    /**
+     * Atualiza as tabelas de prioridade por município e de equipamentos em área de risco.
+     * @param {Array<Object>} municipios Resultado de porMunicipio().
+     * @param {Array<Object>} atingidos Equipamentos atingidos filtrados.
+     * @returns {void}
+     */
+    function atualizarTabelas(municipios, atingidos) {
         linhasPrioridade = municipios.map((m, i) => ({
             'Prioridade': `${i + 1}º`,
             'Município': m.municipio,
             'Área de risco (km²)': m.risco,
-            'Área mapeada (km²)': m.total,
-            '% em risco': m.total > 0 ? m.risco / m.total * 100 : 0
+            '% em risco': m.total > 0 ? m.risco / m.total * 100 : 0,
+            'Equipamentos atingidos': m.equipamentos,
+            'População exposta': layers.temPopulacao ? m.populacao : '–'
         }));
         preencherTabela('tabela-prioridades', linhasPrioridade, 'Nenhum dado de suscetibilidade carregado ou selecionado nos filtros.');
-    }
 
-    /**
-     * Atualiza o gráfico de equipamentos atingidos e a tabela de comparação de cenários.
-     * @returns {void}
-     */
-    function atualizarCenarios() {
-        const cenarios = config.costeiro.cenarios;
-        const tipos = config.costeiro.equipamentos.tipos;
-        const atingidosPorCenario = cenarios.map(c => layers.equipamentosAtingidos(c.id));
-
-        graficoCenarios.data.labels = cenarios.map(c => c.nome);
-        graficoCenarios.data.datasets = tipos.map(t => ({
-            label: t.nome, backgroundColor: t.cor,
-            data: atingidosPorCenario.map(lista => lista.filter(e => e.properties.tipo === t.valor).length)
-        }));
-        graficoCenarios.update();
-        const temDados = cenarios.some(c => (layers.cenarios[c.id] || []).length > 0);
-        mostrarVazio('grafico-gestao-cenarios', !temDados);
-
-        linhasCenarios = cenarios.map((c, i) => {
-            const resumo = layers.resumoCenario(c.id);
-            return {
-                'Cenário': c.nome,
-                'Área inundável (km²)': resumo.area,
-                'Equipamentos atingidos': atingidosPorCenario[i].length,
-                'População exposta': resumo.temPopulacao ? resumo.populacao : '–'
-            };
-        });
-        preencherTabela('tabela-cenarios', linhasCenarios, 'Nenhum cenário cadastrado.');
+        const ordem = config.classes.map(c => c.nome);
+        linhasEquipamentos = atingidos
+            .slice().sort((a, b) => ordem.indexOf(a.properties.classe) - ordem.indexOf(b.properties.classe))
+            .map(e => ({
+                'Equipamento': e.properties.nome,
+                'Tipo': (tipos[e.properties.tipo] || {}).nome || e.properties.tipo,
+                'Município': e.properties.municipio,
+                'Suscetibilidade': e.properties.classe
+            }));
+        preencherTabela('tabela-equipamentos', linhasEquipamentos, 'Nenhum equipamento público em área de risco com os filtros atuais.');
     }
 
     /**
      * Preenche um <tbody> a partir de uma lista de objetos (uma chave por coluna).
+     * Números ficam alinhados à direita e no formato brasileiro.
      * @param {string} id id do <tbody>.
      * @param {Array<Object>} linhas Linhas da tabela.
      * @param {string} mensagemVazia Texto exibido quando não há linhas.
@@ -137,9 +163,9 @@
         linhas.forEach(linha => {
             const tr = document.createElement('tr');
             tr.className = 'border-t';
-            Object.values(linha).forEach((valor, i) => {
+            Object.values(linha).forEach(valor => {
                 const td = document.createElement('td');
-                td.className = 'p-3' + (i > 1 || typeof valor === 'number' ? ' text-right' : '');
+                td.className = 'p-3' + (typeof valor === 'number' || valor === '–' ? ' text-right' : '');
                 td.textContent = typeof valor === 'number' ? fmt(valor, Number.isInteger(valor) ? 0 : 2) : valor;
                 tr.appendChild(td);
             });
@@ -170,17 +196,17 @@
     }
 
     /**
-     * Lista as ações recomendadas para cada classe de suscetibilidade.
+     * Lista as ações recomendadas para cada grau de suscetibilidade.
      * @returns {void}
      */
     function montarAcoes() {
         const lista = document.getElementById('gestao-acoes');
-        config.suscetibilidade.classes.forEach(classe => {
+        config.classes.forEach(classe => {
             const li = document.createElement('li');
             li.className = 'flex items-start space-x-3';
             li.innerHTML = `<span class="mt-1 h-3 w-3 rounded-full flex-shrink-0" style="background:${classe.cor}"></span><div><p class="font-semibold"></p><p class="text-sm text-secundaria"></p></div>`;
             li.querySelector('.font-semibold').textContent = `Suscetibilidade ${classe.nome}`;
-            li.querySelector('.text-sm').textContent = config.acoesPorClasse[classe.nome] || '';
+            li.querySelector('.text-sm').textContent = acoesPorClasse[classe.nome] || '';
             lista.appendChild(li);
         });
     }
@@ -190,10 +216,11 @@
      * @returns {void}
      */
     function atualizar() {
-        const municipios = porMunicipio(layers.suscetibilidadeFiltrada());
-        atualizarIndicadores(municipios);
-        atualizarSuscetibilidade(municipios);
-        atualizarCenarios();
+        const atingidos = equipamentosAtingidos();
+        const municipios = porMunicipio(layers.suscetibilidadeFiltrada(), atingidos);
+        atualizarIndicadores(municipios, atingidos);
+        atualizarGraficos(municipios);
+        atualizarTabelas(municipios, atingidos);
     }
 
     /**
@@ -219,12 +246,12 @@
             graficoMunicipios = new Chart(document.getElementById('grafico-gestao-municipios'), {
                 type: 'bar', data: { labels: [], datasets: [] }, options: opcoesBarras('Área (km²)')
             });
-            graficoCenarios = new Chart(document.getElementById('grafico-gestao-cenarios'), {
-                type: 'bar', data: { labels: [], datasets: [] }, options: opcoesBarras('Equipamentos atingidos', true)
+            graficoEquipamentos = new Chart(document.getElementById('grafico-gestao-equipamentos'), {
+                type: 'bar', data: { labels: [], datasets: [] }, options: opcoesBarras('Equipamentos', true)
             });
             montarAcoes();
             document.getElementById('exportar-prioridades').addEventListener('click', () => exportarCSV(linhasPrioridade, 'geomapaweb_prioridades.csv'));
-            document.getElementById('exportar-cenarios').addEventListener('click', () => exportarCSV(linhasCenarios, 'geomapaweb_cenarios.csv'));
+            document.getElementById('exportar-equipamentos').addEventListener('click', () => exportarCSV(linhasEquipamentos, 'geomapaweb_equipamentos_em_risco.csv'));
             document.getElementById('imprimir-relatorio').addEventListener('click', () => window.print());
             layers.aoMudar(atualizar);
             atualizar();

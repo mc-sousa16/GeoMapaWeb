@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoMAPAWeb - Riscos Ambientais e Apoio à Decisão</title>
     <!-- Chosen Palette: Pedra & Mata -->
-    <!-- Estrutura: site de uma página com abas (Início, Suscetibilidade, Risco Costeiro, Gestão, Guia do Estudante, Repositório).
+    <!-- Estrutura: site de uma página com abas (Início, Suscetibilidade, Gestão, Guia do Estudante, Repositório).
          O JavaScript fica em js/ (um arquivo por aba), os estilos em css/style.css e os GeoJSON em data/.
          Camadas e textos editáveis ficam em js/config.js. -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +44,6 @@
             <div class="flex flex-wrap justify-end gap-2">
                 <button data-target="home" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors active">Início</button>
                 <button data-target="suscetibilidade" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Suscetibilidade</button>
-                <button data-target="costeiro" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Risco Costeiro</button>
                 <button data-target="gestao" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Gestão</button>
                 <button data-target="guia" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Guia do Estudante</button>
                 <button data-target="database" class="nav-button px-3 py-2 rounded-md text-sm font-medium transition-colors">Repositório</button>
@@ -68,7 +67,7 @@
                             </div>
                             <h2 class="text-4xl md:text-5xl font-bold mb-4 text-principal">Plataforma Interativa de Análise de Risco</h2>
                             <p class="text-lg text-secundaria mb-8">
-                                Uma ferramenta de código aberto para visualizar riscos ambientais (suscetibilidade geológica e inundação costeira) e apoiar a tomada de decisão no planejamento territorial, desenvolvida no âmbito de Iniciação Científica Voluntária da UNIFESP.
+                                Uma ferramenta de código aberto para visualizar a suscetibilidade geológica a escorregamentos e apoiar a tomada de decisão no planejamento territorial, desenvolvida no âmbito de Iniciação Científica Voluntária da UNIFESP.
                             </p>
                             <button data-target="suscetibilidade" class="nav-button bg-principal text-white font-bold py-3 px-6 rounded-lg hover:bg-principal/90 transition-colors text-lg">
                                 Explorar o Mapa
@@ -85,16 +84,11 @@
             <div class="container mx-auto px-6 pt-16">
                 <h3 class="text-3xl font-bold text-center mb-4">Como usar a plataforma</h3>
                 <p class="text-center text-secundaria mb-10 max-w-3xl mx-auto">Escolha uma aba no menu superior. Em todos os mapas é possível trocar o mapa de fundo no canto superior direito e clicar em uma área para ver seus detalhes.</p>
-                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid sm:grid-cols-3 gap-6">
                     <button data-target="suscetibilidade" class="nav-button text-left bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                         <p class="text-2xl mb-2" aria-hidden="true">🗻</p>
                         <h4 class="font-bold mb-1">Suscetibilidade Geológica</h4>
-                        <p class="text-sm text-secundaria">Escolha o município e os graus de suscetibilidade a escorregamentos que quer ver no mapa.</p>
-                    </button>
-                    <button data-target="costeiro" class="nav-button text-left bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-                        <p class="text-2xl mb-2" aria-hidden="true">🌊</p>
-                        <h4 class="font-bold mb-1">Risco Costeiro</h4>
-                        <p class="text-sm text-secundaria">Compare cenários de elevação do nível do mar em Aracaju e veja quais escolas, postos de saúde e abrigos seriam atingidos.</p>
+                        <p class="text-sm text-secundaria">Escolha o município e os graus de suscetibilidade a escorregamentos que quer ver no mapa, e veja quais escolas, postos de saúde e abrigos estão em áreas de risco.</p>
                     </button>
                     <button data-target="gestao" class="nav-button text-left bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                         <p class="text-2xl mb-2" aria-hidden="true">📊</p>
@@ -151,6 +145,10 @@
                             <legend class="panel-title mb-2">Grau de Suscetibilidade</legend>
                             <div id="filtro-classes" class="space-y-2 text-sm"></div>
                         </fieldset>
+                        <fieldset class="space-y-2">
+                            <legend class="panel-title mb-2">Equipamentos públicos</legend>
+                            <div id="filtro-equipamentos" class="space-y-2 text-sm"></div>
+                        </fieldset>
                         <div class="space-y-2">
                             <label for="opacidade-suscetibilidade" class="panel-title block">Transparência da camada</label>
                             <input id="opacidade-suscetibilidade" type="range" min="0.1" max="1" step="0.05" class="w-full">
@@ -164,7 +162,7 @@
                 </aside>
                 <div class="flex-1 p-4 md:p-8 lg:p-10 overflow-auto">
                     <h2 class="text-3xl font-bold mb-2">Suscetibilidade Geológica</h2>
-                    <p class="text-secundaria mb-6 max-w-4xl">Suscetibilidade a escorregamentos e movimentos de massa. Use o painel ao lado para escolher o município e os graus exibidos, e o botão de Análise Inteligente para gerar um relatório técnico sobre as áreas visíveis.</p>
+                    <p class="text-secundaria mb-6 max-w-4xl">Suscetibilidade a escorregamentos e movimentos de massa. Use o painel ao lado para escolher o município, os graus e os equipamentos públicos exibidos. Equipamentos com contorno preto estão em área de risco. O botão de Análise Inteligente gera um relatório técnico sobre as áreas visíveis.</p>
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-md">
                             <div id="mapa-suscetibilidade" class="h-96 md:h-[60vh] rounded-lg" role="region" aria-label="Mapa de suscetibilidade geológica"></div>
@@ -189,63 +187,32 @@
         </section>
 
         <!-- ============================================================ -->
-        <!-- ABA RISCO COSTEIRO E INUNDAÇÃO (js/costeiro.js)               -->
-        <!-- ============================================================ -->
-        <section id="costeiro" class="page-section hidden">
-            <div class="flex flex-col md:flex-row min-h-[calc(100vh-64px)]">
-                <aside class="w-full md:w-80 lg:w-96 bg-white/50 p-6 border-r border-destaque/30 flex-shrink-0">
-                    <div class="space-y-6 md:sticky md:top-24">
-                        <fieldset class="space-y-2">
-                            <legend class="panel-title mb-2">Cenário de elevação do mar</legend>
-                            <div id="filtro-cenario" class="space-y-2 text-sm"></div>
-                        </fieldset>
-                        <fieldset class="space-y-2">
-                            <legend class="panel-title mb-2">Equipamentos públicos</legend>
-                            <div id="filtro-equipamentos" class="space-y-2 text-sm"></div>
-                        </fieldset>
-                        <div class="space-y-2">
-                            <label for="opacidade-costeiro" class="panel-title block">Transparência da inundação</label>
-                            <input id="opacidade-costeiro" type="range" min="0.1" max="1" step="0.05" class="w-full">
-                        </div>
-                    </div>
-                </aside>
-                <div class="flex-1 p-4 md:p-8 lg:p-10 overflow-auto">
-                    <h2 class="text-3xl font-bold mb-2">Risco Costeiro e Inundação: Aracaju-SE</h2>
-                    <p class="text-secundaria mb-6 max-w-4xl">Áreas inundadas em cenários de elevação do nível médio do mar. A legenda do mapa mostra a área vulnerável estimada e quantos equipamentos públicos ficam dentro dela no cenário escolhido.</p>
-                    <div class="bg-white p-4 rounded-xl shadow-md">
-                        <div id="mapa-costeiro" class="h-96 md:h-[65vh] rounded-lg" role="region" aria-label="Mapa de risco de inundação costeira"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ============================================================ -->
         <!-- ABA GESTÃO E TOMADA DE DECISÃO (js/gestao.js)                 -->
         <!-- ============================================================ -->
         <section id="gestao" class="page-section hidden container mx-auto px-6 py-12">
             <div class="flex flex-wrap justify-between items-start gap-4 mb-8">
                 <div>
                     <h2 class="text-3xl font-bold mb-2">Gestão e Tomada de Decisão</h2>
-                    <p class="text-secundaria max-w-3xl">Indicadores para gestores públicos e Defesa Civil. Os números seguem o município e os graus escolhidos na aba Suscetibilidade e o cenário escolhido na aba Risco Costeiro.</p>
+                    <p class="text-secundaria max-w-3xl">Indicadores para gestores públicos e Defesa Civil. Os números seguem o município, os graus e os equipamentos escolhidos na aba Suscetibilidade.</p>
                 </div>
                 <button id="imprimir-relatorio" class="no-print bg-principal text-white font-bold py-2 px-4 rounded-lg hover:bg-principal/90">Imprimir / salvar PDF</button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-risco-alto">
-                    <p class="panel-title">Área de risco geológico</p>
+                    <p class="panel-title">Área de risco afetada</p>
                     <p id="kpi-area-risco" class="text-2xl font-bold mt-2">–</p>
-                    <p id="kpi-pct-risco" class="text-xs text-secundaria mt-1"></p>
+                    <p id="kpi-area-risco-nota" class="text-xs text-secundaria mt-1"></p>
                 </div>
-                <div class="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500">
-                    <p class="panel-title">Área inundável</p>
-                    <p id="kpi-area-inundavel" class="text-2xl font-bold mt-2">–</p>
-                    <p id="kpi-area-inundavel-cenario" class="text-xs text-secundaria mt-1"></p>
+                <div class="bg-white p-5 rounded-xl shadow-md">
+                    <p class="panel-title">Área mapeada</p>
+                    <p id="kpi-area-total" class="text-2xl font-bold mt-2">–</p>
+                    <p class="text-xs text-secundaria mt-1">Todos os graus selecionados</p>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-md">
                     <p class="panel-title">Equipamentos atingidos</p>
                     <p id="kpi-equipamentos" class="text-2xl font-bold mt-2">–</p>
-                    <p id="kpi-equipamentos-cenario" class="text-xs text-secundaria mt-1"></p>
+                    <p id="kpi-equipamentos-nota" class="text-xs text-secundaria mt-1"></p>
                 </div>
                 <div class="bg-white p-5 rounded-xl shadow-md">
                     <p class="panel-title">População exposta (estimada)</p>
@@ -263,45 +230,45 @@
                     </div>
                 </div>
                 <div class="bg-white p-4 rounded-xl shadow-md">
-                    <h3 class="font-bold text-lg mb-2">Equipamentos atingidos por cenário</h3>
+                    <h3 class="font-bold text-lg mb-2">Equipamentos públicos por grau de suscetibilidade</h3>
                     <div class="chart-container wide">
-                        <canvas id="grafico-gestao-cenarios" role="img" aria-label="Gráfico de equipamentos atingidos por cenário"></canvas>
-                        <p class="chart-empty hidden">Cadastre os cenários de inundação em js/config.js para ver este gráfico.</p>
+                        <canvas id="grafico-gestao-equipamentos" role="img" aria-label="Gráfico de equipamentos públicos por grau de suscetibilidade"></canvas>
+                        <p class="chart-empty hidden">Cadastre os equipamentos públicos em data/equipamentos_publicos.geojson para ver este gráfico.</p>
                     </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold text-lg">Prioridade de atuação por município</h3>
-                        <button id="exportar-prioridades" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
-                    </div>
-                    <table class="w-full text-sm">
-                        <thead class="text-left text-secundaria">
-                            <tr><th class="p-3">#</th><th class="p-3">Município</th><th class="p-3 text-right">Área de risco (km²)</th><th class="p-3 text-right">Área mapeada (km²)</th><th class="p-3 text-right">% em risco</th></tr>
-                        </thead>
-                        <tbody id="tabela-prioridades"></tbody>
-                    </table>
-                    <p class="text-xs text-secundaria mt-2">Área de risco = soma das classes listadas em classesDeRisco (js/config.js).</p>
+            <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto mb-8">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-lg">Prioridade de atuação por município</h3>
+                    <button id="exportar-prioridades" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
                 </div>
-                <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold text-lg">Comparação de cenários costeiros</h3>
-                        <button id="exportar-cenarios" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
-                    </div>
-                    <table class="w-full text-sm">
-                        <thead class="text-left text-secundaria">
-                            <tr><th class="p-3">Cenário</th><th class="p-3 text-right">Área inundável (km²)</th><th class="p-3 text-right">Equipamentos atingidos</th><th class="p-3 text-right">População exposta</th></tr>
-                        </thead>
-                        <tbody id="tabela-cenarios"></tbody>
-                    </table>
-                </div>
+                <table class="w-full text-sm">
+                    <thead class="text-left text-secundaria">
+                        <tr><th class="p-3">#</th><th class="p-3">Município</th><th class="p-3 text-right">Área de risco (km²)</th><th class="p-3 text-right">% em risco</th><th class="p-3 text-right">Equipamentos atingidos</th><th class="p-3 text-right">População exposta</th></tr>
+                    </thead>
+                    <tbody id="tabela-prioridades"></tbody>
+                </table>
+                <p class="text-xs text-secundaria mt-2">Área de risco = soma das classes listadas em classesDeRisco (js/config.js).</p>
             </div>
 
-            <div class="bg-white p-4 rounded-xl shadow-md">
-                <h3 class="font-bold text-lg mb-4">Ações recomendadas por grau de suscetibilidade</h3>
-                <ul id="gestao-acoes" class="grid sm:grid-cols-2 gap-4"></ul>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-4 rounded-xl shadow-md overflow-x-auto">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-lg">Equipamentos em área de risco</h3>
+                        <button id="exportar-equipamentos" class="no-print text-sm bg-destaque/20 text-principal px-3 py-1 rounded-full font-semibold hover:bg-destaque/40">Exportar CSV</button>
+                    </div>
+                    <table class="w-full text-sm">
+                        <thead class="text-left text-secundaria">
+                            <tr><th class="p-3">Equipamento</th><th class="p-3">Tipo</th><th class="p-3">Município</th><th class="p-3">Suscetibilidade</th></tr>
+                        </thead>
+                        <tbody id="tabela-equipamentos"></tbody>
+                    </table>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-md">
+                    <h3 class="font-bold text-lg mb-4">Ações recomendadas por grau de suscetibilidade</h3>
+                    <ul id="gestao-acoes" class="space-y-4"></ul>
+                </div>
             </div>
         </section>
 
@@ -327,13 +294,13 @@
                     <h3 class="font-bold text-lg mb-2">2. Coloque o arquivo na pasta <code>data/</code></h3>
                     <ul class="list-disc list-inside text-secundaria space-y-1">
                         <li>Suscetibilidade geológica: <code>data/geologico/</code></li>
-                        <li>Risco costeiro e inundação: <code>data/costeiro/</code></li>
+                        <li>Equipamentos públicos (pontos com as colunas <code>tipo</code> e <code>nome</code>): <code>data/equipamentos_publicos.geojson</code></li>
                         <li>Pelo GitHub na web: abra a pasta, clique em <b>Add file &gt; Upload files</b> e arraste o arquivo.</li>
                     </ul>
                 </li>
                 <li class="bg-white p-6 rounded-xl shadow-md">
                     <h3 class="font-bold text-lg mb-2">3. Cadastre a camada em <code>js/config.js</code></h3>
-                    <p class="text-secundaria mb-2">Copie um bloco existente da lista <code>camadas</code> (ou <code>cenarios</code>, para inundação) e troque os valores:</p>
+                    <p class="text-secundaria mb-2">Copie um bloco existente da lista <code>camadas</code> e troque os valores:</p>
 <pre class="bg-fundo border rounded-md p-4 text-xs overflow-x-auto"><code>{
     id: 'diadema_suscetibilidade',          // nome único, sem espaços
     nome: 'Suscetibilidade a escorregamentos',
@@ -341,7 +308,7 @@
     municipio: 'Diadema',                   // aparece no seletor de município
     campoClasse: 'classe'                   // coluna com o grau no GeoJSON
 },</code></pre>
-                    <p class="text-secundaria mt-2">Se a coluna guardar números (1, 2, 3, 4), acrescente <code>mapeamentoClasse: { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Muito Alta' }</code>. A nova camada aparece sozinha no seletor, na legenda e na aba Gestão.</p>
+                    <p class="text-secundaria mt-2">Se a coluna guardar números (1, 2, 3, 4), acrescente <code>mapeamentoClasse: { 1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Muito Alta' }</code>. Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em <code>campoPopulacao</code> para a aba Gestão estimar a população exposta. A nova camada aparece sozinha no seletor, na legenda e na aba Gestão.</p>
                 </li>
                 <li class="bg-white p-6 rounded-xl shadow-md">
                     <h3 class="font-bold text-lg mb-2">4. Teste antes de publicar</h3>
@@ -376,7 +343,6 @@
     <script src="js/ui.js"></script>
     <script src="js/map.js"></script>
     <script src="js/suscetibilidade.js"></script>
-    <script src="js/costeiro.js"></script>
     <script src="js/gestao.js"></script>
     <script src="js/repositorio.js"></script>
     <script src="js/gemini.js"></script>

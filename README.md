@@ -3,15 +3,14 @@
 Este documento serve como um guia para futuros mantenedores da plataforma GeoMAPAWeb, do Laboratório de Geoprocessamento, Modelagem e Análise de Processos Ambientais (GeoMAPA) da UNIFESP - Campus Diadema.
 
 ## Visão Geral do Projeto
-O GeoMAPAWeb é uma plataforma web de código aberto para visualizar riscos ambientais (suscetibilidade geológica e risco de inundação costeira) e apoiar a tomada de decisão no planejamento territorial. Usa HTML, CSS e JavaScript puro, com Leaflet.js, Chart.js e Tailwind carregados por CDN. Não há etapa de build nem `npm install`.
+O GeoMAPAWeb é uma plataforma web de código aberto para visualizar a suscetibilidade geológica a escorregamentos e apoiar a tomada de decisão no planejamento territorial. Usa HTML, CSS e JavaScript puro, com Leaflet.js, Chart.js e Tailwind carregados por CDN. Não há etapa de build nem `npm install`.
 
 ### Abas
 1. **Início**: apresentação do projeto, guia rápido e equipe.
-2. **Suscetibilidade**: mapa de escorregamentos com seletor de município, filtro por grau (Baixa, Média, Alta, Muito Alta), transparência e mapas de fundo (OpenStreetMap, Satélite Esri, Topográfico).
-3. **Risco Costeiro**: cenários de elevação do nível do mar em Aracaju-SE, equipamentos públicos (escolas, saúde, abrigos) e legenda com área vulnerável e equipamentos atingidos.
-4. **Gestão**: indicadores, gráficos Chart.js, tabelas exportáveis em CSV e impressão/PDF.
-5. **Guia do Estudante**: passo a passo para publicar uma nova camada.
-6. **Repositório**: links para os arquivos de cada município.
+2. **Suscetibilidade**: mapa de escorregamentos com seletor de município, filtro por grau (Baixa, Média, Alta, Muito Alta), transparência, equipamentos públicos (escolas, saúde, abrigos) e mapas de fundo (OpenStreetMap, Satélite Esri, Topográfico).
+3. **Gestão**: área de risco, equipamentos atingidos, população exposta, gráficos Chart.js, tabelas exportáveis em CSV e impressão/PDF.
+4. **Guia do Estudante**: passo a passo para publicar uma nova camada.
+5. **Repositório**: links para os arquivos de cada município.
 
 ### Estrutura dos arquivos
 ```text
@@ -19,19 +18,18 @@ O GeoMAPAWeb é uma plataforma web de código aberto para visualizar riscos ambi
 ├── index.html              estrutura das abas
 ├── css/style.css           estilos próprios
 ├── js/
-│   ├── config.js           PONTOS DE CUSTOMIZAÇÃO: camadas, cenários, cores, textos
+│   ├── config.js           PONTOS DE CUSTOMIZAÇÃO: camadas, equipamentos, cores, textos
 │   ├── layers.js           carrega os GeoJSON, calcula áreas e guarda os filtros
 │   ├── ui.js               funções de interface comuns
 │   ├── map.js              criação dos mapas Leaflet, mapas de fundo e legendas
 │   ├── suscetibilidade.js  aba Suscetibilidade
-│   ├── costeiro.js         aba Risco Costeiro
 │   ├── gestao.js           aba Gestão
 │   ├── repositorio.js      aba Repositório
 │   ├── gemini.js           Análise Inteligente (API Gemini)
 │   └── app.js              navegação e inicialização
 ├── data/
 │   ├── geologico/          GeoJSON de suscetibilidade
-│   └── costeiro/           GeoJSON de inundação e equipamentos
+│   └── equipamentos_publicos.geojson   pontos de escolas, saúde e abrigos
 └── assets/                 imagens e logos
 ```
 
@@ -53,11 +51,11 @@ As atualizações são feitas em locais marcados com o comentário `PONTO DE CUS
 * Exporte o GeoJSON no QGIS em **EPSG:4326 - WGS 84**.
 * Salve em `data/geologico/`, com nome sem espaços nem acentos.
 * Em `js/config.js`, copie um bloco da lista `suscetibilidade.camadas` e troque `id`, `arquivo`, `municipio` e `campoClasse` (coluna do grau). Se a coluna tiver números, use `mapeamentoClasse` para convertê-los em Baixa, Média, Alta e Muito Alta.
+* Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em `campoPopulacao` para a aba Gestão estimar a população exposta.
 
-### 2. Para adicionar um cenário de inundação costeira
-* Salve o GeoJSON da área inundada em `data/costeiro/`.
-* Em `js/config.js`, copie um bloco de `costeiro.cenarios`. Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em `campoPopulacao` para a aba Gestão estimar a população exposta.
-* Os equipamentos públicos ficam em `data/costeiro/aracaju_equipamentos.geojson` (pontos com as colunas `tipo` e `nome`; os tipos aceitos estão em `costeiro.equipamentos.tipos`).
+### 2. Para atualizar os equipamentos públicos
+* Substitua `data/equipamentos_publicos.geojson` por um GeoJSON de pontos com as colunas `tipo` (escola, saude, abrigo) e `nome`.
+* Os tipos aceitos e suas cores ficam em `suscetibilidade.equipamentos.tipos`. Um equipamento é contado como atingido quando está dentro de um polígono das `classesDeRisco`.
 
 ### 3. Para atualizar o Repositório de Dados (PDFs, links)
 * Faça o upload do arquivo para algum lugar online (Google Drive ou o próprio GitHub).
@@ -65,7 +63,7 @@ As atualizações são feitas em locais marcados com o comentário `PONTO DE CUS
 
 ### 4. Para ajustar a aba Gestão
 * As ações recomendadas para cada grau ficam em `acoesPorClasse`.
-* As classes somadas no indicador "área de risco" ficam em `suscetibilidade.classesDeRisco`.
+* As classes consideradas de risco (área de risco, equipamentos atingidos e população exposta) ficam em `suscetibilidade.classesDeRisco`.
 
 ### 5. Para alterar a aparência (textos, imagens, logos)
 * Textos da página inicial, equipe, logos e o Guia do Estudante podem ser alterados diretamente no `index.html`.

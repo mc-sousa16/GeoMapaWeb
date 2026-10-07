@@ -2,7 +2,7 @@
  * layers.js: CARREGAMENTO DOS GEOJSON E CÁLCULOS ESPACIAIS
  *
  * Lê os arquivos cadastrados em config.js, acrescenta a cada feição as
- * propriedades que o site usa (classe, municipio, area_km2) e guarda o estado
+ * propriedades que o site usa (classe, municipio, area_km2, atingido) e guarda o estado
  * dos filtros que as abas compartilham. Normalmente não precisa ser editado.
  */
 (function () {
@@ -109,51 +109,80 @@
     }
 
     /**
+     * Calcula o retângulo envolvente de uma geometria, para descartar rápido pontos distantes.
+     * @param {Object} geometry Geometria Polygon ou MultiPolygon.
+     * @returns {Array<number>} [lonMin, latMin, lonMax, latMax].
+     */
+    function retangulo(geometry) {
+        const caixa = [Infinity, Infinity, -Infinity, -Infinity];
+        const percorrer = c => {
+            if (typeof c[0] === 'number') {
+                caixa[0] = Math.min(caixa[0], c[0]); caixa[1] = Math.min(caixa[1], c[1]);
+                caixa[2] = Math.max(caixa[2], c[0]); caixa[3] = Math.max(caixa[3], c[1]);
+            } else c.forEach(percorrer);
+        };
+        if (geometry) percorrer(geometry.coordinates);
+        return caixa;
+    }
+
+    /**
+     * Descobre em qual polígono de suscetibilidade cai um ponto. Se cair em mais de um,
+     * fica com o de grau mais grave.
+     * @param {Array<number>} ponto [longitude, latitude].
+     * @param {Array<Object>} poligonos Feições de suscetibilidade já preparadas.
+     * @returns {Object|null} Feição de suscetibilidade, ou null se o ponto estiver fora de todas.
+     */
+    function poligonoDoPonto([x, y], poligonos) {
+        const ordem = config.suscetibilidade.classes.map(c => c.nome);
+        let escolhido = null;
+        poligonos.forEach(f => {
+            const [x0, y0, x1, y1] = f.properties._caixa;
+            if (x < x0 || x > x1 || y < y0 || y > y1) return;
+            if (!pontoNaGeometria([x, y], f.geometry)) return;
+            if (!escolhido || ordem.indexOf(f.properties.classe) < ordem.indexOf(escolhido.properties.classe)) escolhido = f;
+        });
+        return escolhido;
+    }
+
+    /**
      * Carrega todas as camadas cadastradas em config.js e prepara suas propriedades.
      * @returns {Promise<void>} Resolve quando todos os arquivos foram lidos.
      */
     async function carregar() {
         const s = config.suscetibilidade;
-        const c = config.costeiro;
-
-        const [suscetibilidade, cenarios, equipamentos] = await Promise.all([
+        const [colecoes, equipamentos] = await Promise.all([
             Promise.all(s.camadas.map(camada => baixarGeoJSON(camada.arquivo))),
-            Promise.all(c.cenarios.map(cenario => baixarGeoJSON(cenario.arquivo))),
-            baixarGeoJSON(c.equipamentos.arquivo)
+            baixarGeoJSON(s.equipamentos.arquivo)
         ]);
 
-        // Suscetibilidade: classe, município e área de cada polígono.
+        // Suscetibilidade: classe, município, área e população de cada polígono.
         s.camadas.forEach((camada, i) => {
-            suscetibilidade[i].features.forEach(f => {
+            colecoes[i].features.forEach(f => {
                 const p = f.properties = f.properties || {};
                 const valor = p[camada.campoClasse];
                 p.classe = camada.mapeamentoClasse ? camada.mapeamentoClasse[valor] : valor;
                 p.municipio = (camada.campoMunicipio && p[camada.campoMunicipio]) || camada.municipio;
                 p.area_km2 = areaKm2(f.geometry);
+                p.populacao_estimada = Number(p[camada.campoPopulacao]) || 0;
                 p.camada = camada.id;
+                p._caixa = retangulo(f.geometry);
             });
         });
-        GeoMAPA.layers.suscetibilidade = suscetibilidade.flatMap(g => g.features);
+        GeoMAPA.layers.suscetibilidade = colecoes.flatMap(g => g.features);
+        GeoMAPA.layers.municipios = [...new Set(GeoMAPA.layers.suscetibilidade.map(f => f.properties.municipio))].sort();
+        GeoMAPA.layers.temPopulacao = GeoMAPA.layers.suscetibilidade.some(f => f.properties.populacao_estimada > 0);
 
-        // Inundação: área e população de cada polígono, por cenário.
-        GeoMAPA.layers.cenarios = {};
-        c.cenarios.forEach((cenario, i) => {
-            cenarios[i].features.forEach(f => {
-                const p = f.properties = f.properties || {};
-                p.area_km2 = areaKm2(f.geometry);
-                p.populacao_exposta = Number(p[cenario.campoPopulacao]) || 0;
-            });
-            GeoMAPA.layers.cenarios[cenario.id] = cenarios[i].features;
-        });
-
-        // Equipamentos: tipo e nome padronizados.
+        // Equipamentos públicos: tipo, nome e o grau de suscetibilidade do local onde estão.
         GeoMAPA.layers.equipamentos = equipamentos.features.filter(f => f.geometry && f.geometry.type === 'Point');
         GeoMAPA.layers.equipamentos.forEach(f => {
-            f.properties.tipo = String(f.properties[c.equipamentos.campoTipo] || '').toLowerCase();
-            f.properties.nome = f.properties[c.equipamentos.campoNome] || 'Equipamento';
+            const p = f.properties = f.properties || {};
+            p.tipo = String(p[s.equipamentos.campoTipo] || '').toLowerCase();
+            p.nome = p[s.equipamentos.campoNome] || 'Equipamento';
+            const poligono = poligonoDoPonto(f.geometry.coordinates, GeoMAPA.layers.suscetibilidade);
+            p.classe = poligono ? poligono.properties.classe : null;
+            p.municipio = poligono ? poligono.properties.municipio : null;
+            p.atingido = !!poligono && s.classesDeRisco.includes(p.classe);
         });
-
-        GeoMAPA.layers.municipios = [...new Set(GeoMAPA.layers.suscetibilidade.map(f => f.properties.municipio))].sort();
     }
 
     // Estado compartilhado entre as abas, com aviso para quem quiser reagir a mudanças.
@@ -162,16 +191,15 @@
         municipio: 'todos',
         classes: config.suscetibilidade.classes.map(c => c.nome),
         opacidade: 0.7,
-        cenario: config.costeiro.cenarios.length ? config.costeiro.cenarios[0].id : null,
-        tiposEquipamento: config.costeiro.equipamentos.tipos.map(t => t.valor)
+        tiposEquipamento: config.suscetibilidade.equipamentos.tipos.map(t => t.valor)
     };
 
     GeoMAPA.layers = {
         avisos: [],
         suscetibilidade: [],
-        cenarios: {},
         equipamentos: [],
         municipios: [],
+        temPopulacao: false,
         estado,
         carregar,
         areaKm2,
@@ -186,7 +214,7 @@
 
         /**
          * Altera um filtro e avisa as abas.
-         * @param {string} nome Chave do estado (municipio, classes, opacidade, cenario, tiposEquipamento).
+         * @param {string} nome Chave do estado (municipio, classes, opacidade, tiposEquipamento).
          * @param {*} valor Novo valor.
          * @returns {void}
          */
@@ -196,38 +224,30 @@
         },
 
         /**
-         * Polígonos de suscetibilidade que passam pelos filtros de município e classe.
+         * Informa se uma feição pertence ao município escolhido no seletor.
+         * @param {Object} f Feição GeoJSON com properties.municipio.
+         * @returns {boolean} true se passar pelo filtro de município.
+         */
+        noMunicipio(f) {
+            return estado.municipio === 'todos' || f.properties.municipio === estado.municipio;
+        },
+
+        /**
+         * Polígonos de suscetibilidade que passam pelos filtros de município e grau.
          * @returns {Array<Object>} Feições GeoJSON.
          */
         suscetibilidadeFiltrada() {
-            return this.suscetibilidade.filter(f =>
-                estado.classes.includes(f.properties.classe) &&
+            return this.suscetibilidade.filter(f => estado.classes.includes(f.properties.classe) && this.noMunicipio(f));
+        },
+
+        /**
+         * Equipamentos públicos dos tipos marcados, no município escolhido.
+         * Equipamentos fora de qualquer polígono só aparecem com "Todos os municípios".
+         * @returns {Array<Object>} Feições de ponto.
+         */
+        equipamentosFiltrados() {
+            return this.equipamentos.filter(f => estado.tiposEquipamento.includes(f.properties.tipo) &&
                 (estado.municipio === 'todos' || f.properties.municipio === estado.municipio));
-        },
-
-        /**
-         * Equipamentos públicos dentro da área inundada de um cenário.
-         * @param {string} cenarioId Identificador do cenário em config.js.
-         * @returns {Array<Object>} Feições de ponto atingidas.
-         */
-        equipamentosAtingidos(cenarioId) {
-            const poligonos = this.cenarios[cenarioId] || [];
-            return this.equipamentos.filter(e =>
-                poligonos.some(p => pontoNaGeometria(e.geometry.coordinates, p.geometry)));
-        },
-
-        /**
-         * Soma área e população exposta de um cenário de inundação.
-         * @param {string} cenarioId Identificador do cenário em config.js.
-         * @returns {{area: number, populacao: number, temPopulacao: boolean}} Totais do cenário.
-         */
-        resumoCenario(cenarioId) {
-            const fs = this.cenarios[cenarioId] || [];
-            return {
-                area: fs.reduce((t, f) => t + f.properties.area_km2, 0),
-                populacao: fs.reduce((t, f) => t + f.properties.populacao_exposta, 0),
-                temPopulacao: fs.some(f => f.properties.populacao_exposta > 0)
-            };
         }
     };
 })();

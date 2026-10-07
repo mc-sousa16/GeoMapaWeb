@@ -7,8 +7,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const pages = document.querySelectorAll('.page-section');
     const abas = Array.from(pages).map(p => p.id);
     const aoMostrar = {
-        suscetibilidade: () => GeoMAPA.suscetibilidade.aoMostrar(),
-        costeiro: () => GeoMAPA.costeiro.aoMostrar()
+        suscetibilidade: () => GeoMAPA.suscetibilidade.aoMostrar()
     };
     let pronto = false;
 
@@ -59,7 +58,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     mostrarAvisos(GeoMAPA.layers.avisos);
 
     GeoMAPA.suscetibilidade.init();
-    GeoMAPA.costeiro.init();
     GeoMAPA.gestao.init();
     GeoMAPA.repositorio.init();
     GeoMAPA.gemini.init();
