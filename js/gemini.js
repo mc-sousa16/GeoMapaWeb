@@ -1,8 +1,17 @@
-// Análise Inteligente: relatório gerado pela API Gemini sobre as áreas filtradas no mapa.
+/*
+ * gemini.js: ANÁLISE INTELIGENTE
+ *
+ * Gera, com a API Gemini, um relatório técnico sobre as áreas filtradas na aba Suscetibilidade.
+ */
 (function () {
     // Atenção: uma chave colocada aqui fica pública no GitHub Pages. Use uma chave restrita ao domínio do site.
     const apiKey = "";
 
+    /**
+     * Envia um pedido de texto à API Gemini.
+     * @param {string} prompt Pedido com os dados resumidos.
+     * @returns {Promise<string>} Resposta em Markdown, ou mensagem de erro.
+     */
     async function callGeminiAPI(prompt) {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
         const systemPrompt = "Você é um especialista em geotecnia e análise de risco ambiental. Responda em português do Brasil e use Markdown.";
@@ -18,6 +27,10 @@
         }
     }
 
+    /**
+     * Resume os polígonos filtrados, pede o relatório e mostra o resultado na página.
+     * @returns {Promise<void>}
+     */
     async function handleGenerateReportClick() {
         const reportContainer = document.getElementById('gemini-report-container');
         const spinner = document.getElementById('gemini-spinner');
@@ -27,7 +40,7 @@
         reportContainer.classList.remove('hidden');
         reportContent.innerHTML = '';
 
-        const features = GeoMAPA.data.featuresFiltradas();
+        const features = GeoMAPA.layers.suscetibilidadeFiltrada();
         if (features.length === 0) {
             reportContent.innerHTML = "Nenhuma área de risco selecionada para análise.";
             return;
@@ -38,11 +51,11 @@
         button.classList.add('opacity-50');
 
         // Envia um resumo por classe em vez de cada polígono, para o pedido não ficar enorme.
-        const resumo = GeoMAPA.charts.resumoPorClasse(features);
+        const resumo = GeoMAPA.suscetibilidade.resumoPorClasse(features);
         const municipios = [...new Set(features.map(f => f.properties.municipio))].join(', ');
         const formattedData = Object.entries(resumo)
-            .map(([classe, r]) => `Risco ${classe}: ${r.poligonos} polígonos, ${r.area.toFixed(2)} km²`).join('; ');
-        const userPrompt = `Com base nos dados de suscetibilidade a deslizamentos dos municípios ${municipios}: ${formattedData}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para áreas de risco 'Alto'. 3. Ações de monitoramento para risco 'Médio'.`;
+            .map(([classe, r]) => `Suscetibilidade ${classe}: ${r.poligonos} polígonos, ${r.area.toFixed(2)} km²`).join('; ');
+        const userPrompt = `Com base nos dados de suscetibilidade a deslizamentos dos municípios ${municipios}: ${formattedData}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para áreas de suscetibilidade 'Muito Alta' e 'Alta'. 3. Ações de monitoramento para suscetibilidade 'Média'.`;
 
         const resultText = await callGeminiAPI(userPrompt);
         reportContent.innerHTML = marked.parse(resultText);
@@ -52,6 +65,10 @@
     }
 
     GeoMAPA.gemini = {
+        /**
+         * Liga o botão "Analisar Risco".
+         * @returns {void}
+         */
         init() {
             document.getElementById('gemini-analysis-button').addEventListener('click', handleGenerateReportClick);
         }
