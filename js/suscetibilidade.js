@@ -1,16 +1,16 @@
 /*
  * suscetibilidade.js: ABA SUSCETIBILIDADE GEOLÓGICA
  *
- * Mapa dos polígonos de suscetibilidade com seletor de município, filtro por
- * grau, transparência, equipamentos públicos, legenda e gráfico de área por classe.
- * As camadas e as cores são cadastradas em config.js.
+ * Mapa dos polígonos de suscetibilidade (classes S1, S2 e S3 da metodologia
+ * Soares Jr. et al., 2022) com seletor de município, filtro por classe,
+ * transparência, equipamentos públicos, legenda e gráfico de área por classe.
+ * As camadas, classes e cores são cadastradas em config.js.
  */
 (function () {
     const config = GeoMAPA.config.suscetibilidade;
     const layers = GeoMAPA.layers;
-    const { opcao, marcados, fmt, mostrarVazio } = GeoMAPA.ui;
+    const { opcao, marcados, fmt, mostrarVazio, esc } = GeoMAPA.ui;
     const cores = Object.fromEntries(config.classes.map(c => [c.nome, c.cor]));
-    const tipos = Object.fromEntries(config.equipamentos.tipos.map(t => [t.valor, t]));
 
     let mapa;
     let camada;
@@ -18,22 +18,52 @@
     let grafico;
 
     /**
-     * Soma a área (km²) e conta os polígonos por classe de suscetibilidade.
+     * Soma a área (km²), a população e conta os polígonos por classe de estabilidade.
      * @param {Array<Object>} features Feições de suscetibilidade.
-     * @returns {Object<string, {area: number, poligonos: number}>} Totais por classe.
+     * @returns {Object<string, {area: number, poligonos: number, populacao: number}>} Totais por classe.
      */
     function resumoPorClasse(features) {
         const resumo = {};
-        config.classes.forEach(c => { resumo[c.nome] = { area: 0, poligonos: 0 }; });
+        config.classes.forEach(c => { resumo[c.nome] = { area: 0, poligonos: 0, populacao: 0 }; });
         features.forEach(f => {
             const r = resumo[f.properties.classe];
-            if (r) { r.area += f.properties.area_km2; r.poligonos++; }
+            if (r) { r.area += f.properties.area_km2; r.poligonos++; r.populacao += f.properties.populacao_estimada; }
         });
         return resumo;
     }
 
     /**
-     * Redesenha os polígonos no mapa conforme os filtros atuais.
+     * Monta o texto do popup de um polígono de suscetibilidade.
+     * @param {Object} p Propriedades do polígono.
+     * @returns {string} HTML do popup.
+     */
+    function popupZona(p) {
+        const camadaCfg = config.camadas.find(c => c.id === p.camada) || {};
+        const is = camadaCfg.campoIS ? p[camadaCfg.campoIS] : null;
+        return `<b>Município:</b> ${esc(p.municipio)}` +
+            `<br><b>Classe de estabilidade:</b> ${esc(p.classe)}` +
+            (p.grau ? `<br><b>Grau de risco:</b> ${esc(p.grau)}` : '') +
+            (is != null && is !== '' ? `<br><b>Índice de Suscetibilidade (IS):</b> ${esc(is)}` : '') +
+            (p.populacao_estimada ? `<br><b>População:</b> ${fmt(p.populacao_estimada, 0)}` : '') +
+            `<br><b>Área:</b> ${fmt(p.area_km2, 3)} km²`;
+    }
+
+    /**
+     * Monta o texto do popup de um equipamento público.
+     * @param {Object} p Propriedades do equipamento.
+     * @returns {string} HTML do popup.
+     */
+    function popupEquipamento(p) {
+        const emRisco = p.classe && layers.ehRisco(p);
+        return `<b>${esc(p.nome)}</b><br>${esc(p.tipo || p.categoria)} (${esc(p.categoria)})` +
+            (p.endereco ? `<br>${esc(p.endereco)}` : '') +
+            `<br><b>Classe no local:</b> ${p.classe ? esc(p.classe) : 'fora das áreas mapeadas'}` +
+            (p.fonte ? `<br><b>Fonte:</b> ${esc(p.fonte)}` : '') +
+            (emRisco ? '<br><b style="color:#B71C1C">Equipamento em área de risco</b>' : '');
+    }
+
+    /**
+     * Redesenha os polígonos e os equipamentos no mapa conforme os filtros atuais.
      * @param {boolean} [enquadrar=false] Aproxima o mapa dos polígonos desenhados.
      * @returns {void}
      */
@@ -45,24 +75,23 @@
                 weight: 1, color: 'white', opacity: 1,
                 fillOpacity: layers.estado.opacidade
             }),
-            onEachFeature: (f, l) => l.bindPopup(
-                `<b>Município:</b> ${f.properties.municipio}<br><b>Suscetibilidade:</b> ${f.properties.classe || 'Sem classe'}<br><b>Área:</b> ${fmt(f.properties.area_km2, 3)} km²`)
+            onEachFeature: (f, l) => l.bindPopup(popupZona(f.properties))
         }).addTo(mapa);
 
-        // Equipamentos: contorno preto quando estão numa área das classesDeRisco.
+        // Equipamentos: contorno preto quando estão numa área das classes de risco ativas.
         if (camadaEquipamentos) mapa.removeLayer(camadaEquipamentos);
         camadaEquipamentos = L.geoJSON(layers.equipamentosFiltrados(), {
-            pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-                radius: f.properties.atingido ? 8 : 6,
-                color: f.properties.atingido ? '#000000' : 'white',
-                weight: f.properties.atingido ? 3 : 1.5,
-                fillColor: (tipos[f.properties.tipo] || {}).cor || '#555555',
-                fillOpacity: 1
-            }),
-            onEachFeature: (f, l) => l.bindPopup(
-                `<b>${f.properties.nome}</b><br>${(tipos[f.properties.tipo] || {}).nome || f.properties.tipo}` +
-                `<br><b>Suscetibilidade no local:</b> ${f.properties.classe || 'fora das áreas mapeadas'}` +
-                (f.properties.atingido ? '<br><b style="color:#B71C1C">Equipamento em área de risco</b>' : ''))
+            pointToLayer: (f, latlng) => {
+                const emRisco = f.properties.classe && layers.ehRisco(f.properties);
+                return L.circleMarker(latlng, {
+                    radius: emRisco ? 8 : 6,
+                    color: emRisco ? '#000000' : 'white',
+                    weight: emRisco ? 3 : 1.5,
+                    fillColor: f.properties.cor,
+                    fillOpacity: 1
+                });
+            },
+            onEachFeature: (f, l) => l.bindPopup(popupEquipamento(f.properties))
         }).addTo(mapa);
 
         GeoMAPA.map.enquadrar(mapa, [camada], enquadrar);
@@ -83,7 +112,7 @@
     }
 
     /**
-     * Monta o seletor de município, os filtros de grau e o controle de transparência.
+     * Monta o seletor de município, os filtros de classe e de equipamentos e o controle de transparência.
      * @returns {void}
      */
     function montarFiltros() {
@@ -95,12 +124,14 @@
         });
 
         const classes = document.getElementById('filtro-classes');
-        config.classes.forEach(c => classes.appendChild(opcao({ type: 'checkbox', value: c.nome, label: c.nome, checked: true, cor: c.cor })));
+        config.classes.forEach(c => classes.appendChild(opcao({
+            type: 'checkbox', value: c.nome, label: `${c.nome} (${c.graus.join(' / ')})`, checked: true, cor: c.cor
+        })));
         classes.addEventListener('change', () => layers.definir('classes', marcados(classes)));
 
         const equipamentos = document.getElementById('filtro-equipamentos');
-        config.equipamentos.tipos.forEach(t => equipamentos.appendChild(opcao({ type: 'checkbox', value: t.valor, label: t.nome, checked: true, cor: t.cor })));
-        equipamentos.addEventListener('change', () => layers.definir('tiposEquipamento', marcados(equipamentos)));
+        layers.categorias.forEach(c => equipamentos.appendChild(opcao({ type: 'checkbox', value: c.nome, label: c.nome, checked: true, cor: c.cor })));
+        equipamentos.addEventListener('change', () => layers.definir('categorias', marcados(equipamentos)));
 
         const opacidade = document.getElementById('opacidade-suscetibilidade');
         opacidade.value = layers.estado.opacidade;
@@ -108,8 +139,9 @@
 
         document.getElementById('limpar-filtros').addEventListener('click', () => {
             seletor.value = 'todos';
-            classes.querySelectorAll('input').forEach(i => { i.checked = true; });
+            document.querySelectorAll('#filtro-classes input, #filtro-equipamentos input').forEach(i => { i.checked = true; });
             layers.estado.municipio = 'todos';
+            layers.estado.categorias = layers.categorias.map(c => c.nome);
             layers.definir('classes', config.classes.map(c => c.nome));
             desenhar(true);
         });
@@ -125,9 +157,10 @@
         init() {
             mapa = GeoMAPA.map.criarMapa('mapa-suscetibilidade', config.centro, config.zoom);
             GeoMAPA.map.criarPainel(mapa, 'bottomright').innerHTML =
-                GeoMAPA.map.htmlLegenda('Suscetibilidade', config.classes) +
-                GeoMAPA.map.htmlLegenda('Equipamentos', config.equipamentos.tipos.map(t => ({ nome: t.nome, cor: t.cor, redondo: true }))) +
-                '<div class="text-xs mt-1">Contorno preto = em área de risco</div>';
+                GeoMAPA.map.htmlLegenda('Classe de estabilidade', config.classes.map(c => ({ nome: `${c.nome} <small>(${c.faixa})</small>`, cor: c.cor }))) +
+                GeoMAPA.map.htmlLegenda('Equipamentos', layers.categorias.map(c => ({ nome: c.nome, cor: c.cor, redondo: true }))) +
+                '<div class="text-xs mt-1">Contorno preto = em área de risco</div>' +
+                '<div class="text-xs">Metodologia: Soares Jr. et al. (2022)</div>';
 
             grafico = new Chart(document.getElementById('grafico-suscetibilidade'), {
                 type: 'doughnut',

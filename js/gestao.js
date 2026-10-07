@@ -2,8 +2,10 @@
  * gestao.js: ABA GESTÃO E TOMADA DE DECISÃO
  *
  * Painel com indicadores (KPIs), gráficos Chart.js e tabelas calculados a
- * partir dos mesmos GeoJSON do mapa. Segue os filtros escolhidos na aba
- * Suscetibilidade e permite imprimir/salvar em PDF ou exportar as tabelas em CSV.
+ * partir dos mesmos GeoJSON do mapa. As contas de risco usam as classes de
+ * risco ativas (classesDeRisco em config.js, mais S2/Moderado se o seletor
+ * estiver marcado) e o município escolhido na aba Suscetibilidade.
+ * Permite imprimir/salvar em PDF e exportar as tabelas em CSV.
  */
 (function () {
     const config = GeoMAPA.config.suscetibilidade;
@@ -11,7 +13,6 @@
     const layers = GeoMAPA.layers;
     const { fmt, mostrarVazio } = GeoMAPA.ui;
     const { resumoPorClasse } = GeoMAPA.suscetibilidade;
-    const tipos = Object.fromEntries(config.equipamentos.tipos.map(t => [t.valor, t]));
 
     let graficoMunicipios;
     let graficoEquipamentos;
@@ -20,41 +21,33 @@
     let linhasEquipamentos = [];
 
     /**
-     * Informa se uma classe entra na conta de risco (classesDeRisco em config.js).
-     * @param {string} classe Nome da classe.
-     * @returns {boolean} true se for classe de risco.
+     * Soma uma propriedade numérica de uma lista de feições.
+     * @param {Array<Object>} features Feições GeoJSON.
+     * @param {string} campo Nome da propriedade (ex.: 'area_km2').
+     * @returns {number} Soma.
      */
-    function ehRisco(classe) {
-        return config.classesDeRisco.includes(classe);
+    function somar(features, campo) {
+        return features.reduce((t, f) => t + (f.properties[campo] || 0), 0);
     }
 
     /**
-     * Equipamentos atingidos que passam pelos filtros (tipo, município e grau marcados).
-     * @returns {Array<Object>} Feições de ponto.
-     */
-    function equipamentosAtingidos() {
-        return layers.equipamentosFiltrados().filter(e => e.properties.atingido && layers.estado.classes.includes(e.properties.classe));
-    }
-
-    /**
-     * Agrupa polígonos e equipamentos por município e calcula os totais de cada um.
-     * @param {Array<Object>} features Polígonos de suscetibilidade filtrados.
+     * Calcula os totais de cada município: área mapeada, área de risco, população exposta e equipamentos atingidos.
      * @param {Array<Object>} atingidos Equipamentos atingidos filtrados.
-     * @returns {Array<{municipio: string, resumo: Object, total: number, risco: number, populacao: number, equipamentos: number}>}
-     *          Totais por município, do maior para o menor risco.
+     * @returns {Array<Object>} Totais por município, do maior para o menor risco.
      */
-    function porMunicipio(features, atingidos) {
+    function porMunicipio(atingidos) {
         const grupos = {};
-        features.forEach(f => { (grupos[f.properties.municipio] = grupos[f.properties.municipio] || []).push(f); });
+        layers.suscetibilidade.filter(f => layers.noMunicipio(f)).forEach(f => {
+            (grupos[f.properties.municipio] = grupos[f.properties.municipio] || []).push(f);
+        });
         return Object.entries(grupos).map(([municipio, fs]) => {
-            const resumo = resumoPorClasse(fs);
-            const deRisco = fs.filter(f => ehRisco(f.properties.classe));
+            const deRisco = fs.filter(f => layers.ehRisco(f.properties));
             return {
                 municipio,
-                resumo,
-                total: fs.reduce((t, f) => t + f.properties.area_km2, 0),
-                risco: deRisco.reduce((t, f) => t + f.properties.area_km2, 0),
-                populacao: deRisco.reduce((t, f) => t + f.properties.populacao_estimada, 0),
+                resumo: resumoPorClasse(fs.filter(f => layers.estado.classes.includes(f.properties.classe))),
+                total: somar(fs, 'area_km2'),
+                risco: somar(deRisco, 'area_km2'),
+                populacao: somar(deRisco, 'populacao_estimada'),
                 equipamentos: atingidos.filter(e => e.properties.municipio === municipio).length
             };
         }).sort((a, b) => b.risco - a.risco);
@@ -71,7 +64,7 @@
     }
 
     /**
-     * Atualiza os quatro indicadores do topo do painel.
+     * Atualiza os quatro indicadores do topo do painel e o texto das classes de risco ativas.
      * @param {Array<Object>} municipios Resultado de porMunicipio().
      * @param {Array<Object>} atingidos Equipamentos atingidos filtrados.
      * @returns {void}
@@ -80,15 +73,15 @@
         const total = municipios.reduce((t, m) => t + m.total, 0);
         const risco = municipios.reduce((t, m) => t + m.risco, 0);
         const populacao = municipios.reduce((t, m) => t + m.populacao, 0);
-        const classes = config.classesDeRisco.join(' e ');
 
+        kpi('classes-risco-ativas', layers.classesDeRiscoAtivas().join(', '));
         kpi('kpi-area-risco', `${fmt(risco)} km²`);
-        kpi('kpi-area-risco-nota', total > 0 ? `${fmt(risco / total * 100, 1)}% da área mapeada (${classes})` : 'Sem dados de suscetibilidade');
+        kpi('kpi-area-risco-nota', total > 0 ? `${fmt(risco / total * 100, 1)}% da área mapeada` : 'Sem dados de suscetibilidade');
         kpi('kpi-area-total', `${fmt(total)} km²`);
         kpi('kpi-equipamentos', atingidos.length.toLocaleString('pt-BR'));
-        kpi('kpi-equipamentos-nota', layers.equipamentos.length ? `de ${layers.equipamentosFiltrados().length} cadastrados, em áreas ${classes}` : 'Nenhum equipamento cadastrado');
+        kpi('kpi-equipamentos-nota', layers.equipamentos.length ? `de ${layers.equipamentosFiltrados().length} equipamentos cadastrados` : 'Nenhum equipamento cadastrado');
         kpi('kpi-populacao', layers.temPopulacao ? fmt(populacao, 0) : '–');
-        kpi('kpi-populacao-nota', layers.temPopulacao ? `Residentes em áreas ${classes}` : 'Sem coluna de população no GeoJSON');
+        kpi('kpi-populacao-nota', layers.temPopulacao ? 'Residentes nas áreas de risco (IBGE)' : 'Sem coluna de população no GeoJSON');
     }
 
     /**
@@ -105,12 +98,12 @@
         graficoMunicipios.update();
         mostrarVazio('grafico-gestao-municipios', municipios.length === 0);
 
-        // Equipamentos por grau de suscetibilidade do local, empilhados por tipo.
-        const equipamentos = layers.equipamentosFiltrados().filter(e => e.properties.classe && layers.estado.classes.includes(e.properties.classe));
+        // Equipamentos por classe de estabilidade do local, empilhados por categoria.
+        const equipamentos = layers.equipamentosFiltrados().filter(e => e.properties.classe);
         graficoEquipamentos.data.labels = config.classes.map(c => c.nome);
-        graficoEquipamentos.data.datasets = config.equipamentos.tipos.map(t => ({
-            label: t.nome, backgroundColor: t.cor,
-            data: config.classes.map(c => equipamentos.filter(e => e.properties.tipo === t.valor && e.properties.classe === c.nome).length)
+        graficoEquipamentos.data.datasets = layers.categorias.map(cat => ({
+            label: cat.nome, backgroundColor: cat.cor,
+            data: config.classes.map(c => equipamentos.filter(e => e.properties.categoria === cat.nome && e.properties.classe === c.nome).length)
         }));
         graficoEquipamentos.update();
         mostrarVazio('grafico-gestao-equipamentos', equipamentos.length === 0);
@@ -131,16 +124,18 @@
             'Equipamentos atingidos': m.equipamentos,
             'População exposta': layers.temPopulacao ? m.populacao : '–'
         }));
-        preencherTabela('tabela-prioridades', linhasPrioridade, 'Nenhum dado de suscetibilidade carregado ou selecionado nos filtros.');
+        preencherTabela('tabela-prioridades', linhasPrioridade, 'Nenhum dado de suscetibilidade carregado para o município escolhido.');
 
         const ordem = config.classes.map(c => c.nome);
         linhasEquipamentos = atingidos
             .slice().sort((a, b) => ordem.indexOf(a.properties.classe) - ordem.indexOf(b.properties.classe))
             .map(e => ({
-                'Equipamento': e.properties.nome,
-                'Tipo': (tipos[e.properties.tipo] || {}).nome || e.properties.tipo,
-                'Município': e.properties.municipio,
-                'Suscetibilidade': e.properties.classe
+                'Nome': e.properties.nome,
+                'Tipo': e.properties.tipo || e.properties.categoria,
+                'Município': e.properties.municipio || '–',
+                'Classe de Estabilidade': e.properties.classe,
+                'Grau de Risco': e.properties.grau || '–',
+                'Fonte': e.properties.fonte || '–'
             }));
         preencherTabela('tabela-equipamentos', linhasEquipamentos, 'Nenhum equipamento público em área de risco com os filtros atuais.');
     }
@@ -165,7 +160,7 @@
             tr.className = 'border-t';
             Object.values(linha).forEach(valor => {
                 const td = document.createElement('td');
-                td.className = 'p-3' + (typeof valor === 'number' || valor === '–' ? ' text-right' : '');
+                td.className = 'p-3' + (typeof valor === 'number' ? ' text-right' : '');
                 td.textContent = typeof valor === 'number' ? fmt(valor, Number.isInteger(valor) ? 0 : 2) : valor;
                 tr.appendChild(td);
             });
@@ -196,7 +191,7 @@
     }
 
     /**
-     * Lista as ações recomendadas para cada grau de suscetibilidade.
+     * Lista as ações recomendadas para cada classe de estabilidade.
      * @returns {void}
      */
     function montarAcoes() {
@@ -205,10 +200,21 @@
             const li = document.createElement('li');
             li.className = 'flex items-start space-x-3';
             li.innerHTML = `<span class="mt-1 h-3 w-3 rounded-full flex-shrink-0" style="background:${classe.cor}"></span><div><p class="font-semibold"></p><p class="text-sm text-secundaria"></p></div>`;
-            li.querySelector('.font-semibold').textContent = `Suscetibilidade ${classe.nome}`;
+            li.querySelector('.font-semibold').textContent = `${classe.nome} (${classe.graus.join(' / ')})`;
             li.querySelector('.text-sm').textContent = acoesPorClasse[classe.nome] || '';
             lista.appendChild(li);
         });
+    }
+
+    /**
+     * Liga o seletor que inclui S2: Pouco Estável / Moderado nas classes de risco.
+     * @returns {void}
+     */
+    function montarSeletorRisco() {
+        const seletor = document.getElementById('incluir-opcionais');
+        document.getElementById('rotulo-opcionais').textContent = `Incluir ${config.classesDeRiscoOpcionais.join(' / ')} nas classes de risco`;
+        seletor.checked = layers.estado.incluirOpcionais;
+        seletor.addEventListener('change', () => layers.definir('incluirOpcionais', seletor.checked));
     }
 
     /**
@@ -216,8 +222,8 @@
      * @returns {void}
      */
     function atualizar() {
-        const atingidos = equipamentosAtingidos();
-        const municipios = porMunicipio(layers.suscetibilidadeFiltrada(), atingidos);
+        const atingidos = layers.equipamentosAtingidos();
+        const municipios = porMunicipio(atingidos);
         atualizarIndicadores(municipios, atingidos);
         atualizarGraficos(municipios);
         atualizarTabelas(municipios, atingidos);
@@ -250,6 +256,7 @@
                 type: 'bar', data: { labels: [], datasets: [] }, options: opcoesBarras('Equipamentos', true)
             });
             montarAcoes();
+            montarSeletorRisco();
             document.getElementById('exportar-prioridades').addEventListener('click', () => exportarCSV(linhasPrioridade, 'geomapaweb_prioridades.csv'));
             document.getElementById('exportar-equipamentos').addEventListener('click', () => exportarCSV(linhasEquipamentos, 'geomapaweb_equipamentos_em_risco.csv'));
             document.getElementById('imprimir-relatorio').addEventListener('click', () => window.print());

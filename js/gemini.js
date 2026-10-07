@@ -54,8 +54,9 @@
         const resumo = GeoMAPA.suscetibilidade.resumoPorClasse(features);
         const municipios = [...new Set(features.map(f => f.properties.municipio))].join(', ');
         const formattedData = Object.entries(resumo)
-            .map(([classe, r]) => `Suscetibilidade ${classe}: ${r.poligonos} polígonos, ${r.area.toFixed(2)} km²`).join('; ');
-        const userPrompt = `Com base nos dados de suscetibilidade a deslizamentos dos municípios ${municipios}: ${formattedData}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para áreas de suscetibilidade 'Muito Alta' e 'Alta'. 3. Ações de monitoramento para suscetibilidade 'Média'.`;
+            .map(([classe, r]) => `${classe}: ${r.poligonos} polígonos, ${r.area.toFixed(2)} km²${r.populacao ? `, ${r.populacao} habitantes` : ''}`).join('; ');
+        const atingidos = GeoMAPA.layers.equipamentosAtingidos().length;
+        const userPrompt = `Com base na carta de suscetibilidade a escorregamentos (metodologia Soares Jr. et al., 2022, classes S1: Estável, S2: Pouco Estável e S3: Instável) dos municípios ${municipios}: ${formattedData}. Equipamentos públicos em área de risco: ${atingidos}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para as áreas S3: Instável. 3. Ações de monitoramento para as áreas S2: Pouco Estável.`;
 
         const resultText = await callGeminiAPI(userPrompt);
         reportContent.innerHTML = marked.parse(resultText);

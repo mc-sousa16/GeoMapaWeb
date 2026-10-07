@@ -7,7 +7,7 @@ O GeoMAPAWeb é uma plataforma web de código aberto para visualizar a suscetibi
 
 ### Abas
 1. **Início**: apresentação do projeto, guia rápido e equipe.
-2. **Suscetibilidade**: mapa de escorregamentos com seletor de município, filtro por grau (Baixa, Média, Alta, Muito Alta), transparência, equipamentos públicos (escolas, saúde, abrigos) e mapas de fundo (OpenStreetMap, Satélite Esri, Topográfico).
+2. **Suscetibilidade**: mapa de escorregamentos com seletor de município, filtro por classe de estabilidade (S1 Estável, S2 Pouco Estável, S3 Instável), transparência, equipamentos públicos (escolas, saúde, abrigos) e mapas de fundo (OpenStreetMap, Satélite Esri, Topográfico).
 3. **Gestão**: área de risco, equipamentos atingidos, população exposta, gráficos Chart.js, tabelas exportáveis em CSV e impressão/PDF.
 4. **Guia do Estudante**: passo a passo para publicar uma nova camada.
 5. **Repositório**: links para os arquivos de cada município.
@@ -28,7 +28,7 @@ O GeoMAPAWeb é uma plataforma web de código aberto para visualizar a suscetibi
 │   ├── gemini.js           Análise Inteligente (API Gemini)
 │   └── app.js              navegação e inicialização
 ├── data/
-│   ├── geologico/          GeoJSON de suscetibilidade
+│   ├── geologico/suscetibilidade_sp.geojson   polígonos de suscetibilidade
 │   └── equipamentos_publicos.geojson   pontos de escolas, saúde e abrigos
 └── assets/                 imagens e logos
 ```
@@ -50,20 +50,32 @@ As atualizações são feitas em locais marcados com o comentário `PONTO DE CUS
 ### 1. Para adicionar uma camada de suscetibilidade
 * Exporte o GeoJSON no QGIS em **EPSG:4326 - WGS 84**.
 * Salve em `data/geologico/`, com nome sem espaços nem acentos.
-* Em `js/config.js`, copie um bloco da lista `suscetibilidade.camadas` e troque `id`, `arquivo`, `municipio` e `campoClasse` (coluna do grau). Se a coluna tiver números, use `mapeamentoClasse` para convertê-los em Baixa, Média, Alta e Muito Alta.
-* Se o GeoJSON tiver uma coluna com a população de cada polígono, informe-a em `campoPopulacao` para a aba Gestão estimar a população exposta.
+* Colunas esperadas: `id_zona`, `municipio`, `is_valor`, `classe_estabilidade`, `grau_risco`, `populacao`, `fonte_risco`, `fonte_populacao`.
+* Em `js/config.js`, copie um bloco da lista `suscetibilidade.camadas` e troque `id`, `arquivo` e `municipio`. Se as colunas tiverem outros nomes, ajuste `campoClasse`, `campoIS`, `campoGrau`, `campoPopulacao` e `campoMunicipio`.
+* A classe de cada polígono é lida de `classe_estabilidade`. Se essa coluna faltar, o site usa `is_valor` e, por último, `grau_risco`.
+
+#### Metodologia (Soares Jr. et al., 2022)
+Índice de Suscetibilidade: IS = Σ(Ri × Pij), com pesos declividade 0,40, litologia 0,20, uso do solo 0,20, curvatura 0,10 e lineamentos 0,10.
+
+| Classe | Faixa de IS | Grau de risco |
+|---|---|---|
+| S1: Estável | IS < 2,99 | Muito Baixo / Baixo |
+| S2: Pouco Estável | 2,99 ≤ IS < 3,53 | Moderado |
+| S3: Instável | IS ≥ 3,53 | Alto / Muito Alto |
 
 ### 2. Para atualizar os equipamentos públicos
-* Substitua `data/equipamentos_publicos.geojson` por um GeoJSON de pontos com as colunas `tipo` (escola, saude, abrigo) e `nome`.
-* Os tipos aceitos e suas cores ficam em `suscetibilidade.equipamentos.tipos`. Um equipamento é contado como atingido quando está dentro de um polígono das `classesDeRisco`.
+* Substitua `data/equipamentos_publicos.geojson` por um GeoJSON de pontos com as colunas `id`, `nome`, `tipo` (ex.: "Escola", "UBS", "Centro de Acolhida"), `municipio`, `endereco` e `fonte`.
+* Os tipos são agrupados nas categorias Educação, Saúde e Assistência Social, definidas em `suscetibilidade.equipamentos.categorias`. Tipos não listados aparecem como "Outros".
+* Um equipamento é contado como atingido quando está dentro de uma zona cuja `classe_estabilidade` ou `grau_risco` esteja nas classes de risco ativas.
 
 ### 3. Para atualizar o Repositório de Dados (PDFs, links)
 * Faça o upload do arquivo para algum lugar online (Google Drive ou o próprio GitHub).
 * Edite `databaseData` em `js/config.js`.
 
 ### 4. Para ajustar a aba Gestão
-* As ações recomendadas para cada grau ficam em `acoesPorClasse`.
-* As classes consideradas de risco (área de risco, equipamentos atingidos e população exposta) ficam em `suscetibilidade.classesDeRisco`.
+* As ações recomendadas para cada classe ficam em `acoesPorClasse`.
+* As classes de risco padrão ficam em `suscetibilidade.classesDeRisco` (`S3: Instável`, `Alto`, `Muito Alto`). Na aba Gestão, um seletor inclui também `S2: Pouco Estável` / `Moderado` (lista `classesDeRiscoOpcionais`).
+* A população exposta soma a coluna `populacao` só dos polígonos nas classes de risco ativas.
 
 ### 5. Para alterar a aparência (textos, imagens, logos)
 * Textos da página inicial, equipe, logos e o Guia do Estudante podem ser alterados diretamente no `index.html`.
