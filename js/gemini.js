@@ -1,0 +1,59 @@
+// Análise Inteligente: relatório gerado pela API Gemini sobre as áreas filtradas no mapa.
+(function () {
+    // Atenção: uma chave colocada aqui fica pública no GitHub Pages. Use uma chave restrita ao domínio do site.
+    const apiKey = "";
+
+    async function callGeminiAPI(prompt) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const systemPrompt = "Você é um especialista em geotecnia e análise de risco ambiental. Responda em português do Brasil e use Markdown.";
+        const payload = { contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+        try {
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+            const result = await response.json();
+            return result.candidates[0].content.parts[0].text;
+        } catch (error) {
+            console.error("Erro na API Gemini:", error);
+            return "Não foi possível gerar o relatório.";
+        }
+    }
+
+    async function handleGenerateReportClick() {
+        const reportContainer = document.getElementById('gemini-report-container');
+        const spinner = document.getElementById('gemini-spinner');
+        const reportContent = document.getElementById('gemini-report-content');
+        const button = document.getElementById('gemini-analysis-button');
+
+        reportContainer.classList.remove('hidden');
+        reportContent.innerHTML = '';
+
+        const features = GeoMAPA.data.featuresFiltradas();
+        if (features.length === 0) {
+            reportContent.innerHTML = "Nenhuma área de risco selecionada para análise.";
+            return;
+        }
+
+        spinner.style.display = 'flex';
+        button.disabled = true;
+        button.classList.add('opacity-50');
+
+        // Envia um resumo por classe em vez de cada polígono, para o pedido não ficar enorme.
+        const resumo = GeoMAPA.charts.resumoPorClasse(features);
+        const municipios = [...new Set(features.map(f => f.properties.municipio))].join(', ');
+        const formattedData = Object.entries(resumo)
+            .map(([classe, r]) => `Risco ${classe}: ${r.poligonos} polígonos, ${r.area.toFixed(2)} km²`).join('; ');
+        const userPrompt = `Com base nos dados de suscetibilidade a deslizamentos dos municípios ${municipios}: ${formattedData}. Gere um breve relatório de alerta técnico contendo: 1. Resumo da situação. 2. Recomendações para áreas de risco 'Alto'. 3. Ações de monitoramento para risco 'Médio'.`;
+
+        const resultText = await callGeminiAPI(userPrompt);
+        reportContent.innerHTML = marked.parse(resultText);
+        spinner.style.display = 'none';
+        button.disabled = false;
+        button.classList.remove('opacity-50');
+    }
+
+    GeoMAPA.gemini = {
+        init() {
+            document.getElementById('gemini-analysis-button').addEventListener('click', handleGenerateReportClick);
+        }
+    };
+})();
